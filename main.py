@@ -6,7 +6,7 @@ from utils.set_bot_commands import set_default_commands
 
 if __name__ == '__main__':
     # create_models()
-    print("Создание базы данных...")
+    print("Подключение к базе данных...")
     bot.add_custom_filter(StateFilter(bot))
     set_default_commands(bot)
     print("Загрузка базовых команд...")
