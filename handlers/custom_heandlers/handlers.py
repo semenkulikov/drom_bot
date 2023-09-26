@@ -1,12 +1,13 @@
 import datetime
 from telebot.types import Message
 from handlers.custom_heandlers.work.get_template import get_template, get_random_message
+from handlers.custom_heandlers.work.parser import send_messages_drom
 from keyboards.inline.settings import settings_inline
 from loader import bot
 from states.states import UrlState, GetSettingsState, AccountState
 from urllib.parse import urlparse
 from config_data.config import TEMPLATE_STRING
-from database.models import Interval, MailingTime, Account
+from database.models import Interval, MailingTime, Account, Proxy
 
 
 @bot.message_handler(commands=["url"])
@@ -27,9 +28,9 @@ def get_url(message: Message) -> None:
         bot.send_message(message.from_user.id, "Необходимо ввести корректную ссылку.")
         return
     # Здесь сохранение ссылки в бд и рассылка сообщений. Вызывается функция для запросов к апи.
-    # Наверное, нет смысла сохранять ссылку в бд, если она нужна только для получения объявлений.
     bot.send_message(message.from_user.id, "Ссылка сохранена успешно. Началась рассылка сообщений...")
     bot.set_state(message.from_user.id, None)
+    send_messages_drom(url_path=url, id_user=message.from_user.id)
 
 
 @bot.message_handler(commands=["settings"])
@@ -107,7 +108,8 @@ def get_account(message: Message) -> None:
     accounts_obj = Account.select()
     accounts_text = ""
     for account in accounts_obj:
-        accounts_text += f"\n{account.login}: {account.password}"
+        proxies = " ".join([proxy.proxy for proxy in account.proxy.select().iterator()])
+        accounts_text += f"\n{account.login}: {account.password} ({proxies})"
     if accounts_text == "":
         accounts_text = "\nУ вас нет сохраненных аккаунтов."
     bot.send_message(message.from_user.id, f"Ваши текущие аккаунты: {accounts_text}")
@@ -153,8 +155,33 @@ def get_password(message: Message) -> None:
         )
 
     bot.send_message(message.from_user.id, f"Отлично! Текущий пароль: {password}."
-                                           f"\nНовый аккаунт внесен в базу данных.")
+                                           f"\nНовый аккаунт внесен в базу данных.\n"
+                                           f"Если хотите, можно привязать прокси для этого аккаунта. "
+                                           f"Для пропуска введите Enter.")
 
+    bot.set_state(message.from_user.id, AccountState.get_proxy)
+
+
+@bot.message_handler(state=AccountState.get_proxy)
+def get_password(message: Message) -> None:
+
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data_dict:
+        login = data_dict["login"]
+
+    if message.text == "":
+        bot.send_message(message.from_user.id, "Хорошо, прокси не привязан.")
+
+    else:
+        account_obj = Account.get(Account.login == login)
+        try:
+            proxy_obj = Proxy.get(Proxy.proxy == message.text)
+        except Exception:
+            proxy_obj = Proxy.create(
+                proxy=message.text
+            )
+        account_obj.proxy = proxy_obj
+        account_obj.save()
+        bot.send_message(message.from_user.id, f"Прокси {message.text} сохранен.")
     bot.set_state(message.from_user.id, None)
 
 

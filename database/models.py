@@ -14,10 +14,16 @@ class Interval(BaseModel):
     interval = peewee.IntegerField()
 
 
+class Proxy(BaseModel):
+    """ Класс-модель для прокси """
+    proxy = peewee.CharField()
+
+
 class Account(BaseModel):
     """ Класс-модель аккаунта """
     login = peewee.CharField()
     password = peewee.CharField()
+    proxy = peewee.ForeignKeyField(Proxy, null=True)
 
 
 class MailingTime(BaseModel):
@@ -27,9 +33,3 @@ class MailingTime(BaseModel):
 
 def create_models():
     db.create_tables(BaseModel.__subclasses__())
-
-
-# Что нужно сохранять:
-# Интервал рассылки
-# Время рассылки
-# Аккаунты (логин \ пароль)

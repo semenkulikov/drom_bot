@@ -29,3 +29,9 @@ def get_random_message(message_dict: dict) -> str:
     random_noun = choice(message_dict.get("nouns"))
     random_message = f"{random_greeting} {random_verb} {random_noun} {message_dict.get('message')}"
     return random_message
+
+
+def price_rounding(cur_price: int, percent: int) -> int:
+    """ Функция для округления цены  """
+    new_price = int(round(cur_price - cur_price / 100 * percent, 0))
+    return new_price - new_price % 10000

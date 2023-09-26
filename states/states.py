@@ -14,3 +14,4 @@ class GetSettingsState(StatesGroup):
 class AccountState(StatesGroup):
     get_login = State()
     get_pass = State()
+    get_proxy = State()
