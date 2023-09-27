@@ -108,7 +108,10 @@ def get_account(message: Message) -> None:
     accounts_obj = Account.select()
     accounts_text = ""
     for account in accounts_obj:
-        proxies = " ".join([proxy.proxy for proxy in account.proxy.select().iterator()])
+        try:
+            proxies = " ".join([proxy.proxy for proxy in account.proxy.select().iterator()])
+        except Exception:
+            proxies = "нет прокси в базе данных"
         accounts_text += f"\n{account.login}: {account.password} ({proxies})"
     if accounts_text == "":
         accounts_text = "\nУ вас нет сохраненных аккаунтов."
@@ -202,7 +205,11 @@ def get_info(message: Message) -> None:
     accounts_obj = Account.select()
     accounts_text = ""
     for account in accounts_obj:
-        accounts_text += f"\n        {account.login}: {account.password}"
+        try:
+            proxies = " ".join([proxy.proxy for proxy in account.proxy.select().iterator()])
+        except Exception:
+            proxies = "нет прокси в базе данных"
+        accounts_text += f"\n        {account.login}: {account.password} ({proxies})"
     if accounts_text == "":
         accounts_text = "\n        У вас нет сохраненных аккаунтов."
 

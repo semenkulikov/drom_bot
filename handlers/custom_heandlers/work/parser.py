@@ -275,7 +275,7 @@ def send_messages_drom(url_path, id_user):
                 continue
 
         for path in paths:
-            subprocess.Popen(f"{PATH_TO_PYTHON} run_spam.py {path} {id_user}", close_fds=True)
+            subprocess.Popen(f"{PATH_TO_PYTHON} handlers/custom_heandlers/work/send_message.py {path} {id_user}", close_fds=True)
             # send_message_to_seller(path, id_user)
             sleep(interval * 60)
         break
