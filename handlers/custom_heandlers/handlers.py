@@ -7,7 +7,7 @@ from loader import bot
 from states.states import UrlState, GetSettingsState, AccountState
 from urllib.parse import urlparse
 from config_data.config import TEMPLATE_STRING
-from database.models import Interval, MailingTime, Account, Proxy
+from database.models import Interval, MailingTime, Account, Proxy, Answer
 
 
 @bot.message_handler(commands=["url"])
@@ -228,4 +228,18 @@ def get_info(message: Message) -> None:
                   f"Шаблон сообщения: {template_text}\n    " \
                   f"Процент понижения цены: {template_dict.get('percent')}\n    " \
                   f"Рандомное сообщение: \n{random_text}"
+    bot.send_message(message.from_user.id, result_text)
+
+
+@bot.message_handler(commands=["get"])
+def get_answer(message: Message) -> None:
+    """ Обработчик команды для выдачи ответов продавцов """
+    answers = Answer.select()
+    result_text = ""
+    for answer in answers:
+        result_text += answer.text
+    if result_text == "":
+        result_text = "Нет ответов..."
+
+    bot.send_message(message.from_user.id, "Вот ответы продавцов:")
     bot.send_message(message.from_user.id, result_text)

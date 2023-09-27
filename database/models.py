@@ -31,5 +31,10 @@ class MailingTime(BaseModel):
     end_time = peewee.TimeField()
 
 
+class Answer(BaseModel):
+    """ Класс-модель для объявления """
+    text = peewee.CharField()
+
+
 def create_models():
     db.create_tables(BaseModel.__subclasses__())

@@ -12,8 +12,7 @@ from selenium.webdriver.chrome.options import Options
 from config_data.config import DRIVER_PATH, TEMPLATE_STRING, DENIAL_WORDS
 from handlers.custom_heandlers.work.get_template import price_rounding, get_template, get_random_message
 from handlers.custom_heandlers.work.parser import get_proxy
-from loader import bot
-from database.models import Account
+from database.models import Account, Answer
 import requests
 import random
 
@@ -89,7 +88,6 @@ def login_to_drom(browser, random_account):
                 EC.presence_of_element_located((By.XPATH,
                                                 '//*[@id="signForm"]/div/div/div[2]'))
             )
-            bot.send_message(id_user, f"Введите код, пришедший на номер {phone} в терминале.")
             code = int(input(f"Введите код, пришедший на номер {phone}"))
             text_input_code = WebDriverWait(browser, 10).until(
                 EC.presence_of_element_located((By.XPATH,
@@ -107,7 +105,6 @@ def login_to_drom(browser, random_account):
         print(f"Внимание! Неверные логин и пароль: {random_account.login} - {random_account.password}")
     else:
         print(f"Авторизация прошла успешно: {random_account.login} - {random_account.password}")
-        bot.send_message(id_user, f"Авторизация прошла успешно: {random_account.login} - {random_account.password}")
 
 
 def send_message_to_seller(path_to_announcement, id_user):
@@ -129,7 +126,6 @@ def send_message_to_seller(path_to_announcement, id_user):
             EC.presence_of_element_located(
                 (By.XPATH, '/html/body/div[2]/div[4]/div[1]/div[1]/div[2]/div[2]/div[1]/div[1]'))
         ).text
-        bot.send_message(id_user, f"Цена - {price}")
     except Exception:
         price = None
     price_norm = int(''.join(price[:-2].split())) if price is not None else None
@@ -137,7 +133,6 @@ def send_message_to_seller(path_to_announcement, id_user):
         announcement_name = WebDriverWait(browser, 10).until(
             EC.presence_of_element_located((By.XPATH, "/html/body/div[2]/div[3]/div[2]/h1/span"))
         ).text
-        bot.send_message(id_user, f"Объявление - {announcement_name}")
     except Exception:
         announcement_name = None
     try:
@@ -150,7 +145,6 @@ def send_message_to_seller(path_to_announcement, id_user):
             EC.presence_of_element_located((By.XPATH,
                                             "/html/body/div[2]/div[4]/div[1]/div[1]/div[2]/div[2]/div[6]/div[1]/span"))
         ).text
-        bot.send_message(id_user, f"Номер телефона - {phone}")
     except Exception:
         phone = None
     try:
@@ -160,7 +154,6 @@ def send_message_to_seller(path_to_announcement, id_user):
                                             ))
         )
     except Exception:
-        bot.send_message(id_user, f"Внимание! На этом объявлении нет кнопки 'Написать сообщение'")
         return
     send_button.click()
     template_dict = get_template(TEMPLATE_STRING)
@@ -179,7 +172,6 @@ def send_message_to_seller(path_to_announcement, id_user):
                                         '/html/body/div[6]/div[2]/div/div[3]/button'))
     )
     send_text_button.click()
-    bot.send_message(id_user, f"Сообщение успешно отправлено. {random_text}")
     # Отправка сообщения селлеру
 
     # Здесь переход в чат селлера
@@ -236,13 +228,13 @@ def send_message_to_seller(path_to_announcement, id_user):
             if answer:  # Если есть новое сообщение
                 is_good = filter_answer(answer)
                 if is_good:  # Если сообщение прошло по фильтрам
-                    bot.send_message(id_user, "Внимание! Продавец ответил. Вот информация:\n"
-                                              "Лог переписки:\n"
-                                              f"    Вы - {random_text}\n"
-                                              f"    Продавец - {answer}\n"
-                                              f"Название объявления - {announcement_name}\n"
-                                              f"Ссылка - {path_to_announcement}\n"
-                                              f"Номер телефона - {phone}")
+                    Answer.create(text="\nВнимание! Продавец ответил. Вот информация:\n"
+                                       "Лог переписки:\n"
+                                       f"    Вы - {random_text}\n"
+                                       f"    Продавец - {answer}\n"
+                                       f"Название объявления - {announcement_name}\n"
+                                       f"Ссылка - {path_to_announcement}\n"
+                                       f"Номер телефона - {phone}")
                 break
             sleep(60 * 30)
     except Exception:
