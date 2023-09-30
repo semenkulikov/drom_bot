@@ -1,10 +1,11 @@
 import datetime
 from telebot.types import Message
 from handlers.custom_heandlers.work.get_template import get_template, get_random_message
-from handlers.custom_heandlers.work.parser import send_messages_drom
+from handlers.custom_heandlers.work.parser import send_messages_drom, get_all_messages
 from keyboards.inline.settings import settings_inline
+from keyboards.inline.accounts import account_markup, get_actions_acc, get_proxy_markup
 from loader import bot
-from states.states import UrlState, GetSettingsState, AccountState
+from states.states import UrlState, GetSettingsState, AccountState, UpdateAccount
 from urllib.parse import urlparse
 from config_data.config import TEMPLATE_STRING
 from database.models import Interval, MailingTime, Account, Proxy, Answer
@@ -108,9 +109,8 @@ def get_account(message: Message) -> None:
     accounts_obj = Account.select()
     accounts_text = ""
     for account in accounts_obj:
-        try:
-            proxies = " ".join([proxy.proxy for proxy in account.proxy.select().iterator()])
-        except Exception:
+        proxies = " ".join([proxy.proxy for proxy in Proxy.select().where(Proxy.account == account)])
+        if proxies == "":
             proxies = "нет прокси в базе данных"
         accounts_text += f"\n{account.login}: {account.password} ({proxies})"
     if accounts_text == "":
@@ -159,33 +159,139 @@ def get_password(message: Message) -> None:
 
     bot.send_message(message.from_user.id, f"Отлично! Текущий пароль: {password}."
                                            f"\nНовый аккаунт внесен в базу данных.\n"
-                                           f"Если хотите, можно привязать прокси для этого аккаунта. "
-                                           f"Для пропуска введите Enter.")
+                                           f"Если хотите, можно привязать прокси для этого аккаунта.\n"
+                                           f"Вида: http(s)://username:password@proxyurl:proxyport\n"
+                                           f"Http или https пишите исходя из прокси.\n"
+                                           f"Для пропуска введите -.")
 
     bot.set_state(message.from_user.id, AccountState.get_proxy)
 
 
 @bot.message_handler(state=AccountState.get_proxy)
-def get_password(message: Message) -> None:
+def get_proxy(message: Message) -> None:
 
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data_dict:
         login = data_dict["login"]
 
-    if message.text == "":
+    if message.text == "-":
         bot.send_message(message.from_user.id, "Хорошо, прокси не привязан.")
 
     else:
+        if "@" not in message.text or "http" not in message.text:
+            bot.send_message(message.from_user.id, "Некорректно введен прокси!")
+            return
         account_obj = Account.get(Account.login == login)
         try:
             proxy_obj = Proxy.get(Proxy.proxy == message.text)
         except Exception:
             proxy_obj = Proxy.create(
-                proxy=message.text
+                proxy=message.text,
+                account=account_obj
             )
-        account_obj.proxy = proxy_obj
         account_obj.save()
         bot.send_message(message.from_user.id, f"Прокси {message.text} сохранен.")
     bot.set_state(message.from_user.id, None)
+
+
+@bot.message_handler(commands=["update"])
+def update_accounts(message: Message) -> None:
+    bot.send_message(message.from_user.id, "Выберите аккаунт для редактирования, нажав на кнопку.",
+                     reply_markup=account_markup())
+    bot.set_state(message.from_user.id, UpdateAccount.get_acc)
+
+
+@bot.callback_query_handler(func=None, state=UpdateAccount.get_acc)
+def get_acc(call) -> None:
+    with bot.retrieve_data(call.message.chat.id, call.message.chat.id) as data_dict:
+        data_dict["cur_id"] = call.data
+    cur_account: Account = Account.get_by_id(call.data)
+    proxies = ", ".join([proxy.proxy for proxy in Proxy.select().where(Proxy.account == cur_account)])
+    if proxies == "":
+        proxies = "нет прокси"
+    bot.send_message(call.message.chat.id, f"Текущий аккаунт: {cur_account.login} - {cur_account.password} - {proxies}")
+    bot.send_message(call.message.chat.id, "Выберите, что редактировать", reply_markup=get_actions_acc())
+    bot.set_state(call.message.chat.id, UpdateAccount.get_info)
+
+
+@bot.callback_query_handler(func=None, state=UpdateAccount.get_info)
+def get_info_acc(call) -> None:
+    with bot.retrieve_data(call.message.chat.id, call.message.chat.id) as data_dict:
+        acc_id = data_dict["cur_id"]
+    cur_account = Account.get_by_id(acc_id)
+    proxies = ", ".join([proxy.proxy for proxy in Proxy.select().where(Proxy.account == cur_account)])
+    if call.data == "1":
+        # Login
+        bot.send_message(call.message.chat.id, "Хорошо, введите новый логин")
+        bot.set_state(call.message.chat.id, UpdateAccount.update_login)
+    elif call.data == "2":
+        # Pass
+        bot.send_message(call.message.chat.id, "Ок, введите новый пароль")
+        bot.set_state(call.message.chat.id, UpdateAccount.update_pass)
+    elif call.data == "3":
+        if proxies == '':
+            bot.send_message(call.message.chat.id, "Введите прокси для добавления к этому аккаунту.")
+            bot.set_state(call.message.chat.id, UpdateAccount.update_proxy)
+        # Proxy
+        else:
+            bot.send_message(call.message.chat.id, "Выберите прокси для редактирования, нажав на кнопку.",
+                             reply_markup=get_proxy_markup(acc_id))
+            bot.set_state(call.message.chat.id, UpdateAccount.update_proxy_one)
+
+
+@bot.message_handler(state=UpdateAccount.update_login)
+def update_login(message: Message) -> None:
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data_dict:
+        acc_id = data_dict["cur_id"]
+    cur_account: Account = Account.get_by_id(acc_id)
+    cur_account.login = message.text
+    cur_account.save()
+    bot.send_message(message.chat.id, f"Текущий логин: {message.text}. Логин успешно сохранен.")
+    bot.set_state(message.chat.id, None)
+
+
+@bot.message_handler(state=UpdateAccount.update_pass)
+def update_pass(message: Message) -> None:
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data_dict:
+        acc_id = data_dict["cur_id"]
+    cur_account: Account = Account.get_by_id(acc_id)
+    cur_account.password = message.text
+    cur_account.save()
+    bot.send_message(message.chat.id, f"Текущий пароль: {message.text}. Пароль успешно сохранен.")
+    bot.set_state(message.chat.id, None)
+
+
+@bot.callback_query_handler(func=None, state=UpdateAccount.update_proxy_one)
+def update_proxy(call) -> None:
+    with bot.retrieve_data(call.message.chat.id, call.message.chat.id) as data_dict:
+        data_dict["cur_proxy_id"] = call.data
+    bot.send_message(call.message.chat.id, f"Окей, введите новый прокси или - для удаления текущего.")
+    bot.set_state(call.message.chat.id, UpdateAccount.update_proxy)
+
+
+@bot.message_handler(state=UpdateAccount.update_proxy)
+def update_proxy_2(message: Message) -> None:
+    with bot.retrieve_data(message.chat.id, message.chat.id) as data_dict:
+        acc_id = data_dict.get("cur_id")
+        cur_proxy_id = data_dict.get("cur_proxy_id", None)
+    if cur_proxy_id is None:
+        if "@" not in message.text or "http" not in message.text:
+            bot.send_message(message.chat.id, f"Введенный прокси некорректен. Введите еще раз.")
+            return
+        Proxy.create(proxy=message.text, account=acc_id)
+        bot.send_message(message.chat.id, f"Прокси {message.text} успешно добавлен к аккаунту.")
+        bot.set_state(message.chat.id, None)
+        return
+    cur_proxy: Proxy = Proxy.get_by_id(cur_proxy_id)
+
+    if message.text == "-":
+        bot.send_message(message.chat.id, f"Хорошо, прокси {cur_proxy.proxy} удален.")
+        cur_proxy.delete_instance()
+    else:
+        bot.send_message(message.chat.id, f"Хорошо, прокси {cur_proxy.proxy} изменен на прокси {message.text}")
+        cur_proxy.proxy = message.text
+        cur_proxy.save()
+
+    bot.set_state(message.chat.id, None)
 
 
 @bot.message_handler(commands=["info"])
@@ -205,9 +311,8 @@ def get_info(message: Message) -> None:
     accounts_obj = Account.select()
     accounts_text = ""
     for account in accounts_obj:
-        try:
-            proxies = " ".join([proxy.proxy for proxy in account.proxy.select().iterator()])
-        except Exception:
+        proxies = " ".join([proxy.proxy for proxy in Proxy.select().where(Proxy.account == account)])
+        if proxies == "":
             proxies = "нет прокси в базе данных"
         accounts_text += f"\n        {account.login}: {account.password} ({proxies})"
     if accounts_text == "":
@@ -234,12 +339,8 @@ def get_info(message: Message) -> None:
 @bot.message_handler(commands=["get"])
 def get_answer(message: Message) -> None:
     """ Обработчик команды для выдачи ответов продавцов """
-    answers = Answer.select()
-    result_text = ""
-    for answer in answers:
-        result_text += answer.text
-    if result_text == "":
-        result_text = "Нет ответов..."
+    bot.send_message(message.from_user.id, "Подождите, начался парсинг ответов...")
+    messages_list = get_all_messages()
 
-    bot.send_message(message.from_user.id, "Вот ответы продавцов:")
-    bot.send_message(message.from_user.id, result_text)
+    bot.send_message(message.from_user.id, f"Вот ответы продавцов ({len(messages_list)}):")
+    bot.send_message(message.from_user.id, "\n".join(messages_list))

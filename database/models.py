@@ -14,16 +14,16 @@ class Interval(BaseModel):
     interval = peewee.IntegerField()
 
 
-class Proxy(BaseModel):
-    """ Класс-модель для прокси """
-    proxy = peewee.CharField()
-
-
 class Account(BaseModel):
     """ Класс-модель аккаунта """
     login = peewee.CharField()
     password = peewee.CharField()
-    proxy = peewee.ForeignKeyField(Proxy, null=True)
+
+
+class Proxy(BaseModel):
+    """ Класс-модель для прокси """
+    proxy = peewee.CharField()
+    account = peewee.ForeignKeyField(Account)
 
 
 class MailingTime(BaseModel):
