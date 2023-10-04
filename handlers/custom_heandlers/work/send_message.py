@@ -1,4 +1,5 @@
 import re
+import time
 from time import sleep
 import sys
 from lxml import etree
@@ -51,8 +52,9 @@ def filter_answer(text: str) -> bool:
 
 def login_to_drom(browser, random_account):
     """ Функция для логина на сайте """
-    browser.get("https://my.drom.ru/sign?return=https%3A%2F%2Fauto.drom.ru%2F%3Ftcb%3D1696082743")
-
+    time.sleep(5)
+    browser.get("https://my.drom.ru/sign")
+    time.sleep(5)
     try:
         text_input_login = WebDriverWait(browser, 10).until(
             EC.presence_of_element_located((By.XPATH,
@@ -137,11 +139,18 @@ def send_message_to_seller(path_to_announcement, id_user):
     try:
         send_button = WebDriverWait(browser, 10).until(
             EC.presence_of_element_located((By.XPATH,
-                                            '/html/body/div[2]/div[4]/div[1]/div[1]/div[2]/div[2]/div[4]/div/button'
+                                            '/html/body/div[2]/div[4]/div[1]/div[1]/div[2]/div[2]/div[6]/div/button'
                                             ))
         )
     except Exception:
-        return
+        try:
+            send_button = WebDriverWait(browser, 10).until(
+                EC.presence_of_element_located((By.XPATH,
+                                                '/html/body/div[2]/div[4]/div[1]/div[1]/div[2]/div[2]/div[4]/div/button'
+                                                ))
+            )
+        except Exception:
+            return
     send_button.click()
     template_dict = get_template(TEMPLATE_STRING)
     random_text = get_random_message(template_dict)
@@ -151,18 +160,17 @@ def send_message_to_seller(path_to_announcement, id_user):
     # Здесь получение поля
     text_input_message = WebDriverWait(browser, 10).until(
         EC.presence_of_element_located((By.XPATH,
-                                        '/html/body/div[6]/div[2]/div/div[3]/textarea'))
+                                        '/html/body/div[5]/div[2]/div/div[3]/textarea'))
     )
     text_input_message.send_keys(random_text)
     send_text_button = WebDriverWait(browser, 10).until(
         EC.presence_of_element_located((By.XPATH,
-                                        '/html/body/div[6]/div[2]/div/div[3]/button'))
+                                        '/html/body/div[5]/div[2]/div/div[3]/button'))
     )
     send_text_button.click()
+    print(f"Сообщение отправлено: {random_text}")
     browser.close()
     # Отправка сообщения селлеру
-
-
 
 
 if __name__ == '__main__':

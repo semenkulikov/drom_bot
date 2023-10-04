@@ -389,10 +389,22 @@ def send_messages_drom(url_path, id_user):
     html_code = html.text
     tree = etree.HTML(html_code)
     elem = tree.xpath("/html/body/div[2]/div[4]/div[1]/div[1]/div[5]/div/div[1]")[0]
-    paths = [announcement.get("href")
-             for announcement in elem
-             if announcement.tag == "a"
-             ]
+    paths = list()
+    for a in elem:
+        if a.tag == "a":
+            is_block = False
+            for div in a:
+                if div.tag == "div" and div.get("class") == "css-1dkhqyq e1f2m3x80":
+                    for div_i in div:
+                        if div_i.tag == "div":
+                            divs = [div_j for div_j in div_i if div_j.tag == "div"]
+                            if len(divs) == 2:
+                                is_block = True
+                            break
+                    break
+            if not is_block:
+                paths.append(a.get("href"))
+
     interval_obj = Interval.get_or_none(id=1)
     interval = interval_obj.interval if interval_obj is not None else None
     time = MailingTime.get_or_none(id=1)
@@ -416,5 +428,6 @@ def send_messages_drom(url_path, id_user):
             # subprocess.Popen(f"{PATH_TO_PYTHON} handlers/custom_heandlers/work/send_message.py {path} {id_user}",
             #                  close_fds=True)
             send_message_to_seller(path, id_user)
+            print(f"Сообщение отправлено, сплю {interval} минут")
             sleep(interval * 60)
         break
