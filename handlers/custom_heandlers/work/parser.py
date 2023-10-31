@@ -1,229 +1,236 @@
 import datetime
 import random
-import subprocess
+import re
+import time
 from time import sleep
-from fp.fp import FreeProxy
+
 import requests
 from lxml import etree
-from bs4 import BeautifulSoup as bs
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver import ActionChains
 from selenium.webdriver.chrome.options import Options
-from config_data.config import DRIVER_PATH, PATH_TO_PYTHON
-from database.models import Interval, MailingTime, Proxy
-from handlers.custom_heandlers.work.send_message import send_message_to_seller, get_random_account, filter_answer, \
-    login_to_drom
+from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
-# def filter_answer(text: str) -> bool:
-#     """ Функция-фильтр для фильтрации ответов продавцов. """
-#     text_lower = text.lower()
-#     bad_words_re = r"(\s+|^)[пПnрРp]?[3ЗзВBвПnпрРpPАaAаОoO0о]?[сСcCиИuUОoO0оАaAаыЫуУyтТT]?[Ппn][иИuUeEеЕ][зЗ3][ДдDd]" \
-#                    r"\w*[\?\,\.\;\-]*|(\s+|^)[рРpPпПn]?[рРpPоОoO0аАaAзЗ3]?[оОoO0иИuUаАaAcCсСзЗ3тТTуУy]?[XxХх][уУy]" \
-#                    r"[йЙеЕeEeяЯ9юЮ]\w*[\?\,\.\;\-]*|(\s+|^)[бпПnБ6][лЛ][яЯ9]([дтДТDT]\w*)?[\?\,\.\;\-]*|(\s+|^)((" \
-#                    r"[зЗоОoO03]?[аАaAтТT]?[ъЪ]?)|(\w+[оОOo0еЕeE]))?[еЕeEиИuUёЁ][бБ6пП]([аАaAиИuUуУy]\w*)?[\?\,\.\;\-]*"
-#     if re.findall(bad_words_re, text_lower):
-#         return False
-#
-#     for word in DENIAL_WORDS:
-#         if word in text_lower:
-#             return False
-#     return True
-#
-#
-# def login_to_drom(browser):
-#     """ Функция для логина на сайте """
-#     browser.get("https://my.drom.ru/sign?return=https%3A%2F%2Fwww.drom.ru%2F%3Ftcb%3D1695055100")
-#     accounts_obj = []
-#     for obj in Account.select().iterator():
-#         accounts_obj.append(obj)
-#     if accounts_obj is None:
-#         return None
-#     random_account = random.choice(accounts_obj)
-#     try:
-#         text_input_login = WebDriverWait(browser, 10).until(
-#             EC.presence_of_element_located((By.XPATH,
-#                                             '//*[@id="sign"]'))
-#         )
-#         text_input_login.send_keys(random_account.login)
-#         text_input_password = WebDriverWait(browser, 10).until(
-#             EC.presence_of_element_located((By.XPATH,
-#                                             '//*[@id="password"]'))
-#         )
-#         text_input_password.send_keys(random_account.password)
-#
-#         button = WebDriverWait(browser, 10).until(
-#             EC.presence_of_element_located((By.XPATH, '//*[@id="signbutton"]'))
-#         )
-#         button.click()
-#         try:
-#             try:
-#                 result_code = WebDriverWait(browser, 10).until(
-#                     EC.presence_of_element_located((By.XPATH,
-#                                                     '//*[@id="signForm"]/form/div[2]/button'))
-#                 )
-#             except Exception:
-#                 next_code = WebDriverWait(browser, 10).until(
-#                     EC.presence_of_element_located((By.XPATH,
-#                                                     '//*[@id="signForm"]/a[2]'))
-#                 )
-#                 next_code.click()
-#                 result_code = WebDriverWait(browser, 10).until(
-#                     EC.presence_of_element_located((By.XPATH,
-#                                                     '//*[@id="signForm"]/form/div[2]/button'))
-#                 )
-#             result_code.click()
-#             phone = WebDriverWait(browser, 10).until(
-#                 EC.presence_of_element_located((By.XPATH,
-#                                                 '//*[@id="signForm"]/div/div/div[2]'))
-#             )
-#
-#             code = int(input(f"Введите код, пришедший на номер {phone}"))
-#             text_input_code = WebDriverWait(browser, 10).until(
-#                 EC.presence_of_element_located((By.XPATH,
-#                                                 '//*[@id="code"]'))
-#             )
-#             text_input_code.send_keys(code)
-#             button_code = WebDriverWait(browser, 10).until(
-#                 EC.presence_of_element_located((By.XPATH, '//*[@id="signForm"]/form/button'))
-#             )
-#             button_code.click()
-#
-#         except Exception:
-#             pass
-#     except Exception:
-#         print(f"Внимание! Неверные логин и пароль: {random_account.login} - {random_account.password}")
-#     else:
-#         print(f"Авторизация прошла успешно: {random_account.login} - {random_account.password}")
-#
-#
-# def send_message_to_seller(path_to_announcement, id_user):
-#     """ Функция для отправки сообщения по объявлению """
-#     browser = webdriver.Chrome(service=ChromeService(executable_path=DRIVER_PATH), options=options)
-#
-#     login_to_drom(browser)
-#
-#     browser.get(path_to_announcement)
-#     try:
-#         price = WebDriverWait(browser, 10).until(
-#             EC.presence_of_element_located((By.XPATH, '/html/body/div[2]/div[4]/div[1]/div[1]/div[2]/div[2]/div[1]/div[1]'))
-#         ).text
-#     except Exception:
-#         price = None
-#     price_norm = int(''.join(price[:-2].split())) if price is not None else None
-#     try:
-#         announcement_name = WebDriverWait(browser, 10).until(
-#             EC.presence_of_element_located((By.XPATH, "/html/body/div[2]/div[3]/div[2]/h1/span"))
-#         ).text
-#     except Exception:
-#         announcement_name = None
-#     try:
-#         button_phone = WebDriverWait(browser, 10).until(
-#             EC.presence_of_element_located((By.XPATH,
-#                                             "/html/body/div[2]/div[4]/div[1]/div[1]/div[2]/div[2]/div[5]/button"))
-#         )
-#         button_phone.click()
-#         phone = WebDriverWait(browser, 10).until(
-#             EC.presence_of_element_located((By.XPATH,
-#                                             "/html/body/div[2]/div[4]/div[1]/div[1]/div[2]/div[2]/div[6]/div[1]/span"))
-#         ).text
-#     except Exception:
-#         phone = None
-#     try:
-#         send_button = WebDriverWait(browser, 10).until(
-#             EC.presence_of_element_located((By.XPATH,
-#                                             '/html/body/div[2]/div[4]/div[1]/div[1]/div[2]/div[2]/div[6]/div/button/div'
-#                                             ))
-#         )
-#     except Exception:
-#         return
-#     send_button.click()
-#     template_dict = get_template(TEMPLATE_STRING)
-#     random_text = get_random_message(template_dict)
-#     new_price = price_rounding(price_norm, int(template_dict["percent"]))
-#     random_text = random_text.format(price=new_price)
-#     # Здесь получение поля
-#     text_input_message = WebDriverWait(browser, 10).until(
-#         EC.presence_of_element_located((By.XPATH,
-#                                         '/html/body/div[6]/div[2]/div/div[3]/textarea'))
-#     )
-#     text_input_message.send_keys(random_text)
-#     send_text_button = WebDriverWait(browser, 10).until(
-#         EC.presence_of_element_located((By.XPATH,
-#                                         '/html/body/div[6]/div[2]/div/div[3]/button'))
-#     )
-#     send_text_button.click()
-#     # Отправка сообщения селлеру
-#
-#     # Здесь переход в чат селлера
-#     try:
-#         html_chat = requests.get("https://my.drom.ru/personal/messaging-modal")
-#         html_chat_code = html_chat.text
-#         tree = etree.HTML(html_chat_code)
-#         dialogs = tree.xpath(
-#             '//*[@id="inbox-static-container"]/div/div/section[1]/div/div[2]/div/div[1]/div/div/div[2]/ul'
-#         )
-#         paths_dialog = []
-#         for dialog in dialogs[0]:
-#             if dialog.tag == "a":
-#                 paths_dialog.append(dialog.get("href"))
-#         path_to_dialog = ""
-#         for path_dialog in paths_dialog:
-#             browser.get(path_dialog)
-#             cur_price = WebDriverWait(browser, 10).until(
-#             EC.presence_of_element_located((By.XPATH,
-#                                             '//*[@id="inbox-static-container"]/div/div/section[2]/div/section/'
-#                                             'div/div[1]/div[2]/div[1]/header/div/h3/strong'))
-#         )
-#
-#             if int(''.join(cur_price.text[:-2].split())) == price_norm:
-#                 path_to_dialog = path_dialog
-#     except Exception:
-#         return
-#     try:
-#         while True:
-#             # Пинг ответа раз в полчаса
-#             message_chat = requests.get(path_to_dialog)
-#             message_text = message_chat.text
-#             tree = etree.HTML(message_text)
-#             messages = tree.xpath(
-#                 '//*[@id="bzr-dialog-1317610648"]/div'
-#             )[0]
-#             last_message = []
-#             for message in messages:
-#                 if message.get("class", "") == "bzr-dialog__msg-container":
-#                     last_message.append(message)
-#             last_message = last_message[-1]
-#             text_message = ""
-#             for div_1 in last_message:
-#                 if div_1.get("class") == "bzr-dialog__message bzr-dialog__message_out":
-#                     for div_2 in div_1:
-#                         if div_2.get("class") == "bzr-dialog__message-body":
-#                             for div_3 in div_2:
-#                                 if div_3.get("class") == "bzr-dialog__body-copy":
-#                                     for elem_span in div_3:
-#                                         if elem_span.tag == "span":
-#                                             text_message = elem_span.text
-#
-#             answer = text_message if text_message != random_text else ""  # получение чата
-#             if answer:  # Если есть новое сообщение
-#                 is_good = filter_answer(answer)
-#                 if is_good:  # Если сообщение прошло по фильтрам
-#                     bot.send_message(id_user, "Внимание! Продавец ответил. Вот информация:\n"
-#                                               "Лог переписки:\n"
-#                                               f"    Вы - {random_text}\n"
-#                                               f"    Продавец - {answer}\n"
-#                                               f"Название объявления - {announcement_name}\n"
-#                                               f"Ссылка - {path_to_announcement}\n"
-#                                               f"Номер телефона - {phone}")
-#                 break
-#             sleep(60 * 30)
-#     except Exception:
-#         return
-#
-#
+from config_data.config import DRIVER_PATH, TEMPLATE_STRING, DENIAL_WORDS
+from database.models import Account, Proxy
+from database.models import Interval, MailingTime
+from handlers.custom_heandlers.work.get_template import price_rounding, get_template, get_random_message
+
+options = Options()
+# options.add_argument("--headless")
+# options.add_argument("--incognito")
+options = webdriver.ChromeOptions()
+options.add_argument("start-maximized")
+options.add_experimental_option("excludeSwitches", ["enable-automation"])
+options.add_experimental_option('useAutomationExtension', False)
+cursor_script = '''
+var cursor = document.createElement('div');
+cursor.style.position = 'absolute';
+cursor.style.zIndex = '9999';
+cursor.style.width = '10px';
+cursor.style.height = '10px';
+cursor.style.borderRadius = '50%';
+cursor.style.backgroundColor = 'red';
+cursor.style.pointerEvents = 'none';
+document.body.appendChild(cursor);
+
+document.addEventListener('mousemove', function(e) {
+  cursor.style.left = e.pageX - 5 + 'px';
+  cursor.style.top = e.pageY - 5 + 'px';
+});
+'''
+
+
+def random_mouse_movements(driver):
+    for _ in range(30):
+        try:
+            x = random.randint(1 * _, 10 * _)
+            y = random.randint(2 * _, 11 * _)
+            print(f"Перемещаю курсор на {x}: {y}")
+            ActionChains(driver) \
+                .move_by_offset(x, y) \
+                .perform()
+        except Exception:
+            continue
+
+
+def get_random_account():
+    accounts_obj = []
+    for obj in Account.select().iterator():
+        accounts_obj.append(obj)
+    if accounts_obj is None:
+        return None
+    random_account = random.choice(accounts_obj)
+    return random_account
+
+
+def filter_answer(text: str) -> bool:
+    """ Функция-фильтр для фильтрации ответов продавцов. """
+    text_lower = text.lower()
+    bad_words_re = r"(\s+|^)[пПnрРp]?[3ЗзВBвПnпрРpPАaAаОoO0о]?[сСcCиИuUОoO0оАaAаыЫуУyтТT]?[Ппn][иИuUeEеЕ][зЗ3][ДдDd]" \
+                   r"\w*[\?\,\.\;\-]*|(\s+|^)[рРpPпПn]?[рРpPоОoO0аАaAзЗ3]?[оОoO0иИuUаАaAcCсСзЗ3тТTуУy]?[XxХх][уУy]" \
+                   r"[йЙеЕeEeяЯ9юЮ]\w*[\?\,\.\;\-]*|(\s+|^)[бпПnБ6][лЛ][яЯ9]([дтДТDT]\w*)?[\?\,\.\;\-]*|(\s+|^)((" \
+                   r"[зЗоОoO03]?[аАaAтТT]?[ъЪ]?)|(\w+[оОOo0еЕeE]))?[еЕeEиИuUёЁ][бБ6пП]([аАaAиИuUуУy]\w*)?[\?\,\.\;\-]*"
+    if re.findall(bad_words_re, text_lower):
+        return False
+
+    for word in DENIAL_WORDS:
+        if word in text_lower:
+            return False
+    return True
+
+
+def login_to_drom(browser, random_account):
+    """ Функция для логина на сайте """
+    browser.get("https://my.drom.ru/sign")
+    random_mouse_movements(browser)
+    try:
+        text_input_login = WebDriverWait(browser, 10).until(
+            EC.presence_of_element_located((By.XPATH,
+                                            '//*[@id="sign"]'))
+        )
+        text_input_login.send_keys(random_account.login)
+        text_input_password = WebDriverWait(browser, 10).until(
+            EC.presence_of_element_located((By.XPATH,
+                                            '//*[@id="password"]'))
+        )
+        text_input_password.send_keys(random_account.password)
+
+        button = WebDriverWait(browser, 10).until(
+            EC.presence_of_element_located((By.XPATH, '//*[@id="signbutton"]'))
+        )
+        button.click()
+        try:
+            try:
+                result_code = WebDriverWait(browser, 2).until(
+                    EC.presence_of_element_located((By.XPATH,
+                                                    '//*[@id="signForm"]/form/div[2]/button'))
+                )
+            except Exception:
+                next_code = WebDriverWait(browser, 10).until(
+                    EC.presence_of_element_located((By.XPATH,
+                                                    '//*[@id="signForm"]/a[2]'))
+                )
+                next_code.click()
+                result_code = WebDriverWait(browser, 10).until(
+                    EC.presence_of_element_located((By.XPATH,
+                                                    '//*[@id="signForm"]/form/div[2]/button'))
+                )
+            result_code.click()
+            phone = WebDriverWait(browser, 2).until(
+                EC.presence_of_element_located((By.XPATH,
+                                                '//*[@id="signForm"]/div/div/div[2]'))
+            )
+            code = int(input(f"Введите код, пришедший на номер {phone}"))
+            text_input_code = WebDriverWait(browser, 10).until(
+                EC.presence_of_element_located((By.XPATH,
+                                                '//*[@id="code"]'))
+            )
+            text_input_code.send_keys(code)
+            button_code = WebDriverWait(browser, 10).until(
+                EC.presence_of_element_located((By.XPATH, '//*[@id="signForm"]/form/button'))
+            )
+            button_code.click()
+
+
+        except Exception:
+            pass
+    except Exception:
+        print(f"Внимание! Неверные логин и пароль: {random_account.login} - {random_account.password}")
+    else:
+        print(f"Авторизация прошла успешно: {random_account.login} - {random_account.password}")
+
+
+def send_message_to_seller(path_to_announcement, id_user, browser):
+    """ Функция для отправки сообщения по объявлению """
+    # random_account = get_random_account()
+    # try:
+    #     proxy = random.choice([proxy.proxy for proxy in Proxy.select().where(Proxy.account == random_account)])
+    # except Exception:
+    #     proxy = None
+    # if proxy:
+    #     options.add_argument(f'--proxy-server={proxy}')
+    # browser = webdriver.Chrome(service=ChromeService(executable_path=DRIVER_PATH), options=options)
+    # browser.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+    # browser.execute_cdp_cmd('Network.setUserAgentOverride',
+    #                         {"userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+    #                                       '(KHTML, like Gecko) Chrome/83.0.4103.53 Safari/537.36'})
+    # login_to_drom(browser, random_account)
+
+    browser.get(path_to_announcement)
+
+    try:
+        proxy = get_proxy()
+        session = get_session(proxy)
+        html = session.get(path_to_announcement)
+        html_code = html.text
+        tree = etree.HTML(html_code)
+        elem = tree.xpath("/html/body/div[2]/div[4]/div[1]/div[1]/div[2]/div[1]/div[1]/div/div/div[2]")[0]
+        photos = list()
+        for a in elem:
+            if a.tag == "a":
+                photos.append(a.get("href"))
+    except Exception:
+        print("Не удалось просмотреть фотографии!")
+
+    for photo in photos:
+        browser.get(photo)
+    browser.get(path_to_announcement)
+
+    try:
+        price = WebDriverWait(browser, 10).until(
+            EC.presence_of_element_located(
+                (By.XPATH, '/html/body/div[2]/div[4]/div[1]/div[1]/div[2]/div[2]/div[1]/div[1]'))
+        ).text
+    except Exception:
+        price = None
+    price_norm = int(''.join(price[:-2].split())) if price is not None else None
+    try:
+        send_button = WebDriverWait(browser, 5).until(
+            EC.presence_of_element_located((By.XPATH,
+                                            '/html/body/div[2]/div[4]/div[1]/div[1]/div[2]/div[2]/div[6]/div/button'
+                                            ))
+        )
+    except Exception:
+        try:
+            send_button = WebDriverWait(browser, 10).until(
+                EC.presence_of_element_located((By.XPATH,
+                                                '/html/body/div[2]/div[4]/div[1]/div[1]/div[2]/div[2]/div[4]/div/button'
+                                                ))
+            )
+        except Exception:
+            try:
+                send_button = WebDriverWait(browser, 10).until(
+                    EC.presence_of_element_located((By.XPATH,
+                                                    "/html/body/div[2]/div[4]/div[1]/div[1]/div[2]/div[2]/div[5]/div/button"
+                                                    ))
+                )
+            except Exception:
+                print("Внимание! У данного объявления нет кнопки Отправить сообщение!")
+                return
+    send_button.click()
+    template_dict = get_template(TEMPLATE_STRING)
+    random_text = get_random_message(template_dict)
+    new_price = price_rounding(price_norm, int(template_dict["percent"]))
+    random_text = random_text.format(price=new_price)
+
+    # Здесь получение поля
+    text_input_message = WebDriverWait(browser, 10).until(
+        EC.presence_of_element_located((By.XPATH,
+                                        '/html/body/div[5]/div[2]/div/div[3]/textarea'))
+    )
+    text_input_message.send_keys(random_text)
+    send_text_button = WebDriverWait(browser, 10).until(
+        EC.presence_of_element_located((By.XPATH,
+                                        '/html/body/div[5]/div[2]/div/div[3]/button'))
+    )
+    send_text_button.click()
+    print(f"Сообщение отправлено: {random_text}")
+    # browser.close()
+    # Отправка сообщения селлеру
 
 
 def get_proxy():
@@ -262,8 +269,10 @@ def get_all_messages():
         browser.execute_cdp_cmd('Network.setUserAgentOverride',
                                 {"userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, '
                                               'like Gecko) Chrome/83.0.4103.53 Safari/537.36'})
+        browser.execute_script(cursor_script)
         login_to_drom(browser, random_account)
         browser.get("https://my.drom.ru/personal/messaging-modal")
+        random_mouse_movements(browser)
         messages_list = list()
         for index in range(1, 100):
             try:
@@ -311,7 +320,6 @@ def get_all_messages():
                         (By.XPATH, f'//*[@id="inbox-static-container"]/div/div/section[2]'))
                 ).text
                     messages = messages[messages.find("р.") + 2:]
-                    # Здесь посмотреть как извлечь из этого объекта логи
                     result_text = f"\nПродавец {seller_login} ответил.\n" \
                                   f"Ссылка до страницы продавца - {seller_path}\n" \
                                   f"Имя объявления: {announcement_name}\n" \
@@ -388,7 +396,14 @@ def send_messages_drom(url_path, id_user):
     html = session.get(url_path)
     html_code = html.text
     tree = etree.HTML(html_code)
-    elem = tree.xpath("/html/body/div[2]/div[4]/div[1]/div[1]/div[5]/div/div[1]")[0]
+    try:
+        elem = tree.xpath("/html/body/div[3]/div[5]/div[1]/div[1]/div[10]/div/div[1]")[0]
+    except IndexError:
+        try:
+            elem = tree.xpath("/html/body/div[2]/div[4]/div[1]/div[1]/div[5]/div/div[1]")[0]
+        except Exception:
+            print("Не удалось спарсить страницу, попробуйте снова!")
+            return
     paths = list()
     for a in elem:
         if a.tag == "a":
@@ -406,7 +421,7 @@ def send_messages_drom(url_path, id_user):
                 paths.append(a.get("href"))
 
     interval_obj = Interval.get_or_none(id=1)
-    interval = interval_obj.interval if interval_obj is not None else None
+    interval: str = interval_obj.interval if interval_obj is not None else None
     time = MailingTime.get_or_none(id=1)
     if time is not None:
         start_time, end_time = time.start_time, time.end_time
@@ -416,6 +431,11 @@ def send_messages_drom(url_path, id_user):
     cur_time = datetime.datetime.now().time()
     if interval is None:
         interval = 1
+    else:
+        start_i, stop_i = interval.split("-")
+        start_i, stop_i = int(start_i.strip()), int(stop_i.strip())
+        minutes = [min_i for min_i in range(start_i, stop_i + 1)]
+        interval = random.choice(minutes)
 
     while True:
         if start_time is not None and end_time is not None:
@@ -424,10 +444,26 @@ def send_messages_drom(url_path, id_user):
                 sleep(60 * 60)
                 continue
 
+        random_account = get_random_account()
+        try:
+            proxy = random.choice([proxy.proxy for proxy in Proxy.select().where(Proxy.account == random_account)])
+        except Exception:
+            proxy = None
+        if proxy:
+            options.add_argument(f'--proxy-server={proxy}')
+        browser = webdriver.Chrome(service=ChromeService(executable_path=DRIVER_PATH), options=options)
+        browser.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        browser.execute_cdp_cmd('Network.setUserAgentOverride',
+                                {"userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                                              '(KHTML, like Gecko) Chrome/83.0.4103.53 Safari/537.36'})
+        browser.execute_script(cursor_script)
+        login_to_drom(browser, random_account)
+        random_mouse_movements(browser)
+
         for path in paths:
             # subprocess.Popen(f"{PATH_TO_PYTHON} handlers/custom_heandlers/work/send_message.py {path} {id_user}",
             #                  close_fds=True)
-            send_message_to_seller(path, id_user)
+            send_message_to_seller(path, id_user, browser)
             print(f"Сообщение отправлено, сплю {interval} минут")
             sleep(interval * 60)
         break

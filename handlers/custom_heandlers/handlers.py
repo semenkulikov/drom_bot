@@ -1,4 +1,6 @@
 import datetime
+import random
+
 from telebot.types import Message
 from handlers.custom_heandlers.work.get_template import get_template, get_random_message
 from handlers.custom_heandlers.work.parser import send_messages_drom, get_all_messages
@@ -54,7 +56,7 @@ def get_settings(message: Message) -> None:
 @bot.callback_query_handler(func=None, state=GetSettingsState.get_settings)
 def interval_or_time(call):
     if call.data == "interval":
-        bot.send_message(call.message.chat.id, 'Хорошо, введите время между отправкой сообщений (в минутах).')
+        bot.send_message(call.message.chat.id, 'Хорошо, напишите промежуток интервала вида min - min (5 - 15).')
         bot.set_state(call.message.chat.id, GetSettingsState.interval)
     elif call.data == "time":
         bot.send_message(call.message.chat.id, "Напишите время рассылки в формате: h:m - h:m (12:00 - 20:00)")
@@ -300,7 +302,12 @@ def get_info(message: Message) -> None:
 
     # Здесь достаю интервал из бд.
     interval_obj = Interval.get_or_none(id=1)
-    interval = interval_obj.interval if interval_obj is not None else None
+    interval = interval_obj.interval if interval_obj is not None else ""
+    start_i, stop_i = interval.split("-")
+    start_i, stop_i = int(start_i.strip()), int(stop_i.strip())
+    minutes = [min_i for min_i in range(start_i, stop_i + 1)]
+    print(minutes)
+    random_interval = random.choice(minutes)
     time = MailingTime.get_or_none(id=1)
     if time is not None:
         start_time, end_time = time.start_time, time.end_time
@@ -327,6 +334,7 @@ def get_info(message: Message) -> None:
     )
     random_text = get_random_message(template_dict)
     result_text = f"Основная информация по боту:\n    Текущий интервал между рассылкой: {interval}\n    " \
+                  f"Рандомный интервал: {random_interval}\n    " \
                   f"Время начала рассылки: {start_time}\n    " \
                   f"Время окончания: {end_time}\n    " \
                   f"Ваши текущие аккаунты: {accounts_text}\n    " \
