@@ -1,7 +1,8 @@
 import datetime
+import os
 import random
 import re
-import time
+import sys
 from time import sleep
 
 import requests
@@ -14,8 +15,11 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, f"{BASE_DIR}/../../")
+
 from config_data.config import DRIVER_PATH, TEMPLATE_STRING, DENIAL_WORDS
-from database.models import Account, Proxy
+from database.models import Account, Proxy, Answer
 from database.models import Interval, MailingTime
 from handlers.custom_heandlers.work.get_template import price_rounding, get_template, get_random_message
 
@@ -45,11 +49,11 @@ document.addEventListener('mousemove', function(e) {
 
 
 def random_mouse_movements(driver):
+    print("Передвигаю курсор на рандомные точки...")
     for _ in range(30):
         try:
             x = random.randint(1 * _, 10 * _)
             y = random.randint(2 * _, 11 * _)
-            print(f"Перемещаю курсор на {x}: {y}")
             ActionChains(driver) \
                 .move_by_offset(x, y) \
                 .perform()
@@ -57,13 +61,16 @@ def random_mouse_movements(driver):
             continue
 
 
-def get_random_account():
+def get_random_account(old_acc=None):
     accounts_obj = []
     for obj in Account.select().iterator():
         accounts_obj.append(obj)
     if accounts_obj is None:
         return None
     random_account = random.choice(accounts_obj)
+    if old_acc is not None:
+        while random_account == old_acc:
+            random_account = random.choice(accounts_obj)
     return random_account
 
 
@@ -144,21 +151,8 @@ def login_to_drom(browser, random_account):
         print(f"Авторизация прошла успешно: {random_account.login} - {random_account.password}")
 
 
-def send_message_to_seller(path_to_announcement, id_user, browser):
+def send_message_to_seller(path_to_announcement, id_user, browser, account_name):
     """ Функция для отправки сообщения по объявлению """
-    # random_account = get_random_account()
-    # try:
-    #     proxy = random.choice([proxy.proxy for proxy in Proxy.select().where(Proxy.account == random_account)])
-    # except Exception:
-    #     proxy = None
-    # if proxy:
-    #     options.add_argument(f'--proxy-server={proxy}')
-    # browser = webdriver.Chrome(service=ChromeService(executable_path=DRIVER_PATH), options=options)
-    # browser.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-    # browser.execute_cdp_cmd('Network.setUserAgentOverride',
-    #                         {"userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-    #                                       '(KHTML, like Gecko) Chrome/83.0.4103.53 Safari/537.36'})
-    # login_to_drom(browser, random_account)
 
     browser.get(path_to_announcement)
 
@@ -175,9 +169,19 @@ def send_message_to_seller(path_to_announcement, id_user, browser):
                 photos.append(a.get("href"))
     except Exception:
         print("Не удалось просмотреть фотографии!")
+    print('Начинаю просмотр фотографий...')
+    try:
+        for photo in photos:
+            try:
+                browser.get(photo)
+            except Exception:
+                print(f"Не удалось открыть фото {photo}")
+            sleep(random.choice([0.3, 0.5, 1, 2, 1.5]))
 
-    for photo in photos:
-        browser.get(photo)
+    except Exception:
+        print("Что-то пошло не так с фотками!")
+    else:
+        print("Фотки успешно просмотрены")
     browser.get(path_to_announcement)
 
     try:
@@ -215,20 +219,28 @@ def send_message_to_seller(path_to_announcement, id_user, browser):
     template_dict = get_template(TEMPLATE_STRING)
     random_text = get_random_message(template_dict)
     new_price = price_rounding(price_norm, int(template_dict["percent"]))
-    random_text = random_text.format(price=new_price)
-
-    # Здесь получение поля
-    text_input_message = WebDriverWait(browser, 10).until(
-        EC.presence_of_element_located((By.XPATH,
-                                        '/html/body/div[5]/div[2]/div/div[3]/textarea'))
-    )
-    text_input_message.send_keys(random_text)
-    send_text_button = WebDriverWait(browser, 10).until(
-        EC.presence_of_element_located((By.XPATH,
-                                        '/html/body/div[5]/div[2]/div/div[3]/button'))
-    )
-    send_text_button.click()
-    print(f"Сообщение отправлено: {random_text}")
+    random_text = random_text.format(price=new_price).split()
+    try:
+        # Здесь получение поля
+        text_input_message = WebDriverWait(browser, 10).until(
+            EC.presence_of_element_located((By.XPATH,
+                                            '/html/body/div[5]/div[2]/div/div[3]/textarea'))
+        )
+        for word in random_text:
+            text_input_message.send_keys(f"{word} ")
+            sleep(random.choice([0.3, 0.5, 1, 2, 1.5]))
+        send_text_button = WebDriverWait(browser, 10).until(
+            EC.presence_of_element_located((By.XPATH,
+                                            '/html/body/div[5]/div[2]/div/div[3]/button'))
+        )
+        send_text_button.click()
+        print(f"Сообщение отправлено: {' '.join(random_text)}")
+    except Exception:
+        print(f"Внимание! Превышен лимит отправленных сообщений у этого аккаунта: {account_name.login}")
+        random_account = get_random_account(old_acc=account_name)
+        login_to_drom(browser, random_account)
+        random_mouse_movements(browser)
+        send_message_to_seller(path, id_user, browser, random_account)
     # browser.close()
     # Отправка сообщения селлеру
 
@@ -265,16 +277,19 @@ def get_all_messages():
         if proxy:
             options.add_argument(f'--proxy-server={proxy}')
         browser = webdriver.Chrome(service=ChromeService(executable_path=DRIVER_PATH), options=options)
-        browser.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        browser.execute_cdp_cmd('Network.setUserAgentOverride',
-                                {"userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, '
-                                              'like Gecko) Chrome/83.0.4103.53 Safari/537.36'})
-        browser.execute_script(cursor_script)
+        try:
+            browser.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            browser.execute_cdp_cmd('Network.setUserAgentOverride',
+                                    {"userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, '
+                                                  'like Gecko) Chrome/83.0.4103.53 Safari/537.36'})
+            browser.execute_script(cursor_script)
+        except Exception:
+            print("Не удалось ввести скрипты для обхода капчи!")
         login_to_drom(browser, random_account)
         browser.get("https://my.drom.ru/personal/messaging-modal")
         random_mouse_movements(browser)
         messages_list = list()
-        for index in range(1, 100):
+        for index in range(1, 10000):
             try:
                 elem = WebDriverWait(browser, 10).until(
                     EC.presence_of_element_located(
@@ -326,7 +341,12 @@ def get_all_messages():
                                   f"Ссылка на объявление: {path_to_announcement}\n" \
                                   f"Цена: {price}\n" \
                                   f"Логи переписки:\n{messages}"
-                    messages_list.append(result_text)
+                    is_good = filter_answer(result_text)
+                    if is_good:
+                        messages_list.append(result_text)
+                    else:
+                        print("Внимание! Данное сообщение не прошло по фильтрам!\n"
+                              f"{result_text}")
 
                 except Exception:
                     print("Непредвиденная ошибка! Не получилось спарсить объявление")
@@ -379,10 +399,20 @@ def get_all_messages():
                               f"Логи переписки:\n{messages}"
                 messages_list.append(result_text)
 
+
             except Exception:
                 messages_list.append("Нет полученных ответов...")
+        for message in messages_list:
+            try:
+                Answer.create(text=message)
+            except Exception:
+                cur_answer = Answer.get(text=message)
+                cur_answer.active = False
+                cur_answer.save()
+        answers = [answer.text for answer in Answer.select().where(Answer.active == True)]
+
         browser.close()
-        return messages_list
+        return answers
 
     except Exception:
         return ["У вас проблемы с интернетом!"]
@@ -399,11 +429,15 @@ def send_messages_drom(url_path, id_user):
     try:
         elem = tree.xpath("/html/body/div[3]/div[5]/div[1]/div[1]/div[10]/div/div[1]")[0]
     except IndexError:
-        try:
-            elem = tree.xpath("/html/body/div[2]/div[4]/div[1]/div[1]/div[5]/div/div[1]")[0]
-        except Exception:
-            print("Не удалось спарсить страницу, попробуйте снова!")
-            return
+        for _ in range(100):
+            try:
+                elem = tree.xpath("/html/body/div[2]/div[4]/div[1]/div[1]/div[5]/div/div[1]")[0]
+            except Exception:
+                print("Не удалось спарсить страницу, пробую снова!")
+                sleep(random.choice([0.3, 0.5, 1, 2, 1.5]))
+            else:
+                print("Страница успешно загружена!")
+                break
     paths = list()
     for a in elem:
         if a.tag == "a":
@@ -430,12 +464,11 @@ def send_messages_drom(url_path, id_user):
 
     cur_time = datetime.datetime.now().time()
     if interval is None:
-        interval = 1
+        minutes = [1]
     else:
         start_i, stop_i = interval.split("-")
         start_i, stop_i = int(start_i.strip()), int(stop_i.strip())
         minutes = [min_i for min_i in range(start_i, stop_i + 1)]
-        interval = random.choice(minutes)
 
     while True:
         if start_time is not None and end_time is not None:
@@ -463,7 +496,19 @@ def send_messages_drom(url_path, id_user):
         for path in paths:
             # subprocess.Popen(f"{PATH_TO_PYTHON} handlers/custom_heandlers/work/send_message.py {path} {id_user}",
             #                  close_fds=True)
-            send_message_to_seller(path, id_user, browser)
-            print(f"Сообщение отправлено, сплю {interval} минут")
-            sleep(interval * 60)
+            try:
+                send_message_to_seller(path, id_user, browser, random_account)
+            except Exception:
+                print(f"Произошла какая-то ошибка, возможно связана с капчой")
+            random_interval = random.choice(minutes)
+            print(f"Сообщение отправлено, сплю {random_interval} минут")
+            sleep(random_interval * 60)
         break
+
+
+if __name__ == '__main__':
+    path, id_user = sys.argv[1], sys.argv[2]
+    print("Запущен асинхронный процесс! Переданы следующие параметры:\n"
+          f"Path: {path}\n"
+          f"ID_USER: {id_user}\n")
+    send_messages_drom(path, id_user)

@@ -33,7 +33,8 @@ class MailingTime(BaseModel):
 
 class Answer(BaseModel):
     """ Класс-модель для объявления """
-    text = peewee.CharField()
+    text = peewee.CharField(unique=True)
+    active = peewee.BooleanField(default=True)
 
 
 def create_models():

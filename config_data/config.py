@@ -15,7 +15,8 @@ DEFAULT_COMMANDS = (
     ('accounts', "Добавить аккаунт"),
     ('info', "Информация о настройках"),
     ('get', "Получить ответы продавцов"),
-    ("update", "Редактирование аккаунтов")
+    ("update", "Редактирование аккаунтов"),
+    ("stop", "Остановить рассылку сообщений")
 )
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

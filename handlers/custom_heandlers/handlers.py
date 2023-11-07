@@ -1,6 +1,9 @@
 import datetime
 import random
+import subprocess
+from time import sleep
 
+import psutil
 from telebot.types import Message
 from handlers.custom_heandlers.work.get_template import get_template, get_random_message
 from handlers.custom_heandlers.work.parser import send_messages_drom, get_all_messages
@@ -9,8 +12,11 @@ from keyboards.inline.accounts import account_markup, get_actions_acc, get_proxy
 from loader import bot
 from states.states import UrlState, GetSettingsState, AccountState, UpdateAccount
 from urllib.parse import urlparse
-from config_data.config import TEMPLATE_STRING
+from config_data.config import TEMPLATE_STRING, PATH_TO_PYTHON, BASE_DIR
 from database.models import Interval, MailingTime, Account, Proxy, Answer
+
+
+PIDS_PROCESS = list()
 
 
 @bot.message_handler(commands=["url"])
@@ -24,6 +30,7 @@ def get_command_url(message: Message) -> None:
 @bot.message_handler(state=UrlState.get_url)
 def get_url(message: Message) -> None:
     """ Хендлер для получения ссылки """
+    global PIDS_PROCESS
 
     url = message.text
     print(url)
@@ -33,7 +40,10 @@ def get_url(message: Message) -> None:
     # Здесь сохранение ссылки в бд и рассылка сообщений. Вызывается функция для запросов к апи.
     bot.send_message(message.from_user.id, "Ссылка сохранена успешно. Началась рассылка сообщений...")
     bot.set_state(message.from_user.id, None)
-    send_messages_drom(url_path=url, id_user=message.from_user.id)
+    process = subprocess.Popen(f"{PATH_TO_PYTHON} "
+                     f"{BASE_DIR}/handlers/custom_heandlers/work/parser.py {url} {message.from_user.id}",
+                     close_fds=True)
+    PIDS_PROCESS.append(process.pid)
 
 
 @bot.message_handler(commands=["settings"])
@@ -348,7 +358,32 @@ def get_info(message: Message) -> None:
 def get_answer(message: Message) -> None:
     """ Обработчик команды для выдачи ответов продавцов """
     bot.send_message(message.from_user.id, "Подождите, начался парсинг ответов...")
-    messages_list = get_all_messages()
+    bot.send_message(message.from_user.id, "Буду присылать вам ответы раз в 10 минут")
+    while True:
+        messages_list = get_all_messages()
 
-    bot.send_message(message.from_user.id, f"Вот ответы продавцов ({len(messages_list)}):")
-    bot.send_message(message.from_user.id, "\n".join(messages_list))
+        bot.send_message(message.from_user.id, f"Вот ответы продавцов ({len(messages_list)}):")
+        bot.send_message(message.from_user.id, "\n".join(messages_list))
+        sleep(10 * 64)
+
+
+@bot.message_handler(commands=["stop"])
+def stopping_bot(message: Message) -> None:
+    """ Обработчик команды для остановки рассылки сообщений """
+    bot.send_message(message.from_user.id, "Подождите, останавливаю рассылку...")
+    global PIDS_PROCESS
+
+    # bot.stop_bot()
+    PROCNAMES = [
+        "chrome.exe",
+    ]
+
+    for proc in psutil.process_iter():
+        # check whether the process name matches
+        # if proc.name() in PROCNAMES:
+        #     proc.kill()
+        if proc.pid in PIDS_PROCESS:
+            proc.kill()
+            PIDS_PROCESS.remove(proc.pid)
+
+    bot.send_message(message.from_user.id, "Готово!")

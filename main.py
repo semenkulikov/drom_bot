@@ -11,4 +11,5 @@ if __name__ == '__main__':
     set_default_commands(bot)
     print("Загрузка базовых команд...")
     print("Бот запущен.")
+    bot.remove_webhook()
     bot.infinity_polling(timeout=60 * 60)
