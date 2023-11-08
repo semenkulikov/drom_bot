@@ -426,6 +426,7 @@ def send_messages_drom(url_path, id_user):
     html = session.get(url_path)
     html_code = html.text
     tree = etree.HTML(html_code)
+    elem = None
     try:
         elem = tree.xpath("/html/body/div[3]/div[5]/div[1]/div[1]/div[10]/div/div[1]")[0]
     except IndexError:
@@ -438,7 +439,11 @@ def send_messages_drom(url_path, id_user):
             else:
                 print("Страница успешно загружена!")
                 break
+
     paths = list()
+    if elem is None:
+        print("Внимание! Попытки спарсить страницу закончились! Заканчиваю процесс...")
+        exit()
     for a in elem:
         if a.tag == "a":
             is_block = False

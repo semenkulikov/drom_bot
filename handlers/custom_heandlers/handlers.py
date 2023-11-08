@@ -1,10 +1,13 @@
 import datetime
+import os
 import random
 import subprocess
+import sys
 from time import sleep
 
 import psutil
 from telebot.types import Message
+
 from handlers.custom_heandlers.work.get_template import get_template, get_random_message
 from handlers.custom_heandlers.work.parser import send_messages_drom, get_all_messages
 from keyboards.inline.settings import settings_inline
@@ -359,12 +362,9 @@ def get_answer(message: Message) -> None:
     """ Обработчик команды для выдачи ответов продавцов """
     bot.send_message(message.from_user.id, "Подождите, начался парсинг ответов...")
     bot.send_message(message.from_user.id, "Буду присылать вам ответы раз в 10 минут")
-    while True:
-        messages_list = get_all_messages()
-
-        bot.send_message(message.from_user.id, f"Вот ответы продавцов ({len(messages_list)}):")
-        bot.send_message(message.from_user.id, "\n".join(messages_list))
-        sleep(10 * 64)
+    process = subprocess.Popen(f"{PATH_TO_PYTHON} "
+                     f"{BASE_DIR}/handlers/custom_heandlers/get_answers.py {message.from_user.id}",
+                     close_fds=True)
 
 
 @bot.message_handler(commands=["stop"])
