@@ -135,8 +135,9 @@ def login_to_drom(browser, random_account):
             phone = WebDriverWait(browser, 2).until(
                 EC.presence_of_element_located((By.XPATH,
                                                 '//*[@id="signForm"]/div/div/div[2]'))
-            )
-            code = int(input(f"Введите код, пришедший на номер {phone}"))
+            ).text
+            code = int(input(f"Введите код, пришедший на номер {phone}: "))
+
             text_input_code = WebDriverWait(browser, 10).until(
                 EC.presence_of_element_located((By.XPATH,
                                                 '//*[@id="code"]'))
@@ -147,7 +148,6 @@ def login_to_drom(browser, random_account):
             )
             button_code.click()
 
-
         except Exception:
             pass
     except Exception:
@@ -156,7 +156,7 @@ def login_to_drom(browser, random_account):
         print(f"Авторизация прошла успешно: {random_account.login} - {random_account.password}")
 
 
-def send_message_to_seller(path_to_announcement, id_user, browser, account_name):
+def send_message_to_seller(path_to_announcement, id_user, browser, account_name) -> bool:
     """ Функция для отправки сообщения по объявлению """
 
     browser.get(path_to_announcement)
@@ -248,7 +248,8 @@ def send_message_to_seller(path_to_announcement, id_user, browser, account_name)
         print(f"Сообщение отправлено: {' '.join(random_text)}")
     else:
         print(f"Внимание! Превышен лимит отправленных сообщений у этого аккаунта: {account_name.login}")
-        print("Закрываю браузер, открываю новый...")
+        print("Заканчиваю рассылку сообщений...")
+        return False
         browser.close()
 
         options = Options()
@@ -284,6 +285,7 @@ def send_message_to_seller(path_to_announcement, id_user, browser, account_name)
         login_to_drom(browser, random_account)
         random_mouse_movements(browser)
         send_message_to_seller(path_to_announcement, id_user, browser, random_account)
+    return True
     # browser.close()
     # Отправка сообщения селлеру
 
@@ -348,16 +350,6 @@ def get_all_messages():
                         continue
                     elem.click()
                     try:
-                        # if answer:  # Если есть новое сообщение
-                        #     is_good = filter_answer(answer)
-                        #     if is_good:  # Если сообщение прошло по фильтрам
-                        #         Answer.create(text="\nВнимание! Продавец ответил. Вот информация:\n"
-                        #                            "Лог переписки:\n"
-                        #                            f"    Вы - {random_text}\n"
-                        #                            f"    Продавец - {answer}\n"
-                        #                            f"Название объявления - {announcement_name}\n"
-                        #                            f"Ссылка - {path_to_announcement}\n"
-                        #                            f"Номер телефона - {phone}")
                         announcement_name_obj = WebDriverWait(browser, 10).until(
                             EC.presence_of_element_located(
                                 (
@@ -393,12 +385,11 @@ def get_all_messages():
 
                         if messages_html.find("bzr-dialog__message_highlighted") != -1:
                             messages = messages[messages.find("р.") + 2:]
-                            result_text = f"\nПродавец {seller_login} ответил.\n" \
-                                          f"Ссылка до страницы продавца - {seller_path}\n" \
-                                          f"Имя объявления: {announcement_name}\n" \
-                                          f"Ссылка на объявление: {path_to_announcement}\n" \
-                                          f"Цена: {price}\n" \
-                                          f"Логи переписки:\n{messages}"
+                            result_text = (f"\nПродавец {seller_login} ответил.\n"
+                                           f"{announcement_name}\n"
+                                           f"Ссылка: {path_to_announcement}\n"
+                                           f"Цена: {price}р.\n\n"
+                                           f"Переписка:\n{messages}")
                             is_good = filter_answer(result_text)
                             if is_good:
                                 messages_list.append(result_text)
@@ -487,10 +478,10 @@ def send_messages_drom(url_path, id_user):
     tree = etree.HTML(html_code)
     elem = None
     try:
-        elem = tree.xpath("/html/body/div[3]/div[5]/div[1]/div[1]/div[10]/div/div[1]")[0]
+        elem = tree.xpath("/html/body/div[2]/div[4]/div[1]/div[1]/div[5]/div[1]/div[1]")[0]
     except IndexError:
         print("Не удалось спарсить страницу, попробую еще 100 раз!")
-        for _ in range(40):
+        for _ in range(2):
             try:
                 elem = tree.xpath("/html/body/div[2]/div[4]/div[1]/div[1]/div[5]/div/div[1]")[0]
             except Exception:
@@ -500,21 +491,26 @@ def send_messages_drom(url_path, id_user):
                 break
 
     paths = list()
-    if elem is not None:
-        for a in elem:
-            if a.tag == "a":
-                is_block = False
-                for div in a:
-                    if div.tag == "div" and div.get("class") == "css-1dkhqyq e1f2m3x80":
-                        for div_i in div:
-                            if div_i.tag == "div":
-                                divs = [div_j for div_j in div_i if div_j.tag == "div"]
-                                if len(divs) == 2:
-                                    is_block = True
-                                break
-                        break
-                if not is_block:
-                    paths.append(a.get("href"))
+    try:
+        if elem is not None:
+            for a in elem:
+                if a.tag == "a":
+                    is_block = False
+                    for div in a:
+                        if div.tag == "div" and div.get("class") == "css-1dkhqyq e1f2m3x80":
+                            for div_i in div:
+                                if div_i.tag == "div":
+                                    divs = [div_j for div_j in div_i if div_j.tag == "div"]
+                                    if len(divs) == 2:
+                                        print("Дошел до очередной ссылки...")
+                                        is_block = True
+                                    break
+                            break
+                    if not is_block:
+                        paths.append(a.get("href"))
+    except Exception:
+        print("Произошла ошибка! Не удалось получить список ссылок на объявления")
+        exit()
 
     options = Options()
     options.add_argument("--headless")
@@ -605,7 +601,9 @@ def send_messages_drom(url_path, id_user):
             # subprocess.Popen(f"{PATH_TO_PYTHON} handlers/custom_heandlers/work/send_message.py {path} {id_user}",
             #                  close_fds=True)
             try:
-                send_message_to_seller(path, id_user, browser, random_account)
+                result = send_message_to_seller(path, id_user, browser, random_account)
+                if not result:
+                    exit()
             except Exception:
                 print(f"Произошла какая-то ошибка, возможно связана с капчой")
             random_interval = random.choice(minutes)

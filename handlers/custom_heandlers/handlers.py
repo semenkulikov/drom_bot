@@ -1,6 +1,7 @@
 import datetime
 import random
 import subprocess
+from time import sleep
 from urllib.parse import urlparse
 
 import psutil
@@ -416,3 +417,12 @@ def stopping_bot(message: Message) -> None:
                 PIDS_PROCESS.remove(proc.pid)
 
         bot.send_message(message.from_user.id, "Готово!")
+
+
+@bot.message_handler(commands=["test_spam"])
+def starting_bot(message: Message) -> None:
+    while True:
+        sleep(1)
+        print("Отправляю сообщение...")
+        bot.send_message(1893836348, "Привет! Как тебе нравится пользоваться чужим ботом?")
+        print("Отправлено!")

@@ -7,7 +7,7 @@ from config_data.config import ALLOWED_USERS
 
 @bot.message_handler(state=None)
 def bot_echo(message: Message):
-    if message.from_user.id in ALLOWED_USERS:
+    if message.from_user.id in ALLOWED_USERS and message.chat.type == "private":
         bot.reply_to(message, f"Введите любую команду из меню, чтобы я начал работать\n"
                               f"Либо выберите одну из кнопок, которые я вам прислал")
 

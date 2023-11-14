@@ -12,8 +12,11 @@ if __name__ == '__main__':
     message_id = sys.argv[1]
     while True:
         messages_list = get_all_messages()
-
-        bot.send_message(message_id, f"Вот ответы продавцов ({len(messages_list)}):")
-        bot.send_message(message_id, "\n".join(messages_list))
-        sleep(10 * 64)
+        if len(messages_list) == 0:
+            bot.send_message(message_id, "Нет новых сообщений.")
+        else:
+            bot.send_message(message_id, f"Вот ответы продавцов ({len(messages_list)}):")
+            for message in messages_list:
+                bot.send_message(message_id, message)
+            sleep(10 * 64)
 
