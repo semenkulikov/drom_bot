@@ -39,3 +39,7 @@ class Answer(BaseModel):
 
 def create_models():
     db.create_tables(BaseModel.__subclasses__())
+
+
+def delete_answers():
+    Answer.delete().execute()

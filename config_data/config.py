@@ -16,13 +16,19 @@ DEFAULT_COMMANDS = (
     ('info', "Информация о настройках"),
     ('get', "Получить ответы продавцов"),
     ("update", "Редактирование аккаунтов"),
-    ("stop", "Остановить рассылку сообщений")
+    ("stop_spam", "Остановить рассылку сообщений"),
+    ("stop", "Выход из всех состояний бота")
 )
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PATH_TO_TEMPLATE = os.path.join(BASE_DIR, "message_template.txt")
 
 DRIVER_PATH = "C:/chromedriver/chromedriver.exe"
+
+ALLOWED_USERS = [
+    5194842887,  # Мой
+    146012477,   # Deny Devito
+]
 
 PATH_TO_PYTHON = os.path.normpath(os.path.join(BASE_DIR, "venv/Scripts/python.exe"))
 
