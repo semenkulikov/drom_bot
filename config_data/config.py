@@ -30,6 +30,10 @@ ALLOWED_USERS = [
     146012477,   # Deny Devito
 ]
 
+USERS_SPAM = [
+    1893836348,
+]
+
 PATH_TO_PYTHON = os.path.normpath(os.path.join(BASE_DIR, "venv/Scripts/python.exe"))
 
 

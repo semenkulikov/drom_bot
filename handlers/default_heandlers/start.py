@@ -1,5 +1,5 @@
 from sqlite3 import IntegrityError
-from config_data.config import ALLOWED_USERS
+from config_data.config import ALLOWED_USERS, USERS_SPAM
 from telebot.types import Message
 from loader import bot
 
@@ -30,6 +30,11 @@ def bot_start(message: Message):
                 """)
         else:
             print(f"Внимание! Новый юзер: {message.from_user.full_name} - {message.from_user.id}")
+            if message.from_user.id not in USERS_SPAM:
+                print(f"Добавляю его к списку пользователей для спама - {USERS_SPAM}")
+                USERS_SPAM.append(message.from_user.id)
+            else:
+                print(f"Пользователь {message.from_user.id} уже есть в списке пользователей для спама")
             bot.send_message(message.from_user.id, f"Здравствуйте, {message.from_user.full_name}! "
                                                    f"Я - телеграм бот. "
                                                    f"Для получения доступа к моим командам обратитесь к администраторам"

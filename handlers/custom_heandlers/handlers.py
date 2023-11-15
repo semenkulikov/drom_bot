@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 import psutil
 from telebot.types import Message
 
-from config_data.config import TEMPLATE_STRING, PATH_TO_PYTHON, BASE_DIR, ALLOWED_USERS
+from config_data.config import TEMPLATE_STRING, PATH_TO_PYTHON, BASE_DIR, ALLOWED_USERS, USERS_SPAM
 from database.models import Interval, MailingTime, Account, Proxy
 from handlers.custom_heandlers.work.get_template import get_template, get_random_message
 from keyboards.inline.accounts import account_markup, get_actions_acc, get_proxy_markup
@@ -419,10 +419,19 @@ def stopping_bot(message: Message) -> None:
         bot.send_message(message.from_user.id, "Готово!")
 
 
-@bot.message_handler(commands=["test_spam"])
+@bot.message_handler(commands=["users_spam"])
 def starting_bot(message: Message) -> None:
-    while True:
+    USERS_COPY = USERS_SPAM.copy()
+    bot.send_message(message.from_user.id, f"Текущий список пользователей: {USERS_COPY}")
+    while USERS_COPY:
         sleep(1)
-        print("Отправляю сообщение...")
-        bot.send_message(1893836348, "Привет! Как тебе нравится пользоваться чужим ботом?")
-        print("Отправлено!")
+        bot.send_message(message.from_user.id, "Отправляю сообщение...")
+        for user in USERS_COPY:
+            try:
+                bot.send_message(user, "Привет! Как тебе нравится пользоваться чужим ботом?")
+            except Exception:
+                bot.send_message(message.from_user.id,
+                                 "Пользователь {} заблокировал бота, невозможно его спамить!".format(user))
+                USERS_COPY.remove(user)
+    bot.send_message(message.from_user.id, "Заканчиваю рассылку...")
+    bot.send_message(message.from_user.id, f"Текущий список пользователей: {USERS_COPY}")
