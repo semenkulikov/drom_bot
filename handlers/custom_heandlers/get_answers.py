@@ -10,6 +10,7 @@ from loader import bot
 
 if __name__ == '__main__':
     message_id = sys.argv[1]
+    time_sleep = int(sys.argv[2]) * 60
     while True:
         messages_list = get_all_messages()
         if len(messages_list) == 0:
@@ -18,5 +19,4 @@ if __name__ == '__main__':
             bot.send_message(message_id, f"Вот ответы продавцов ({len(messages_list)}):")
             for message in messages_list:
                 bot.send_message(message_id, message)
-            sleep(10 * 64)
-
+        sleep(time_sleep)

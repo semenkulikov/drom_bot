@@ -18,8 +18,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, f"{BASE_DIR}/../../")
 
+from loader import bot
 from config_data.config import DRIVER_PATH, TEMPLATE_STRING, DENIAL_WORDS
-from database.models import Account, Proxy, Answer
+from database.models import Account, Proxy, Answer, Queue
 from database.models import Interval, MailingTime
 from handlers.custom_heandlers.work.get_template import price_rounding, get_template, get_random_message
 
@@ -48,6 +49,7 @@ document.addEventListener('mousemove', function(e) {
   cursor.style.top = e.pageY - 5 + 'px';
 });
 '''
+ACCOUNTS_LIMIT = list()
 
 
 def random_mouse_movements(driver):
@@ -63,20 +65,12 @@ def random_mouse_movements(driver):
             continue
 
 
-def get_random_account(old_acc=None):
-    accounts_obj = []
+def get_account():
     for obj in Account.select().iterator():
-        accounts_obj.append(obj)
-    if accounts_obj is None:
-        return None
-    random_account = random.choice(accounts_obj)
-    if len(accounts_obj) == 1:
-        return random_account
-    else:
-        if old_acc is not None:
-            while random_account == old_acc:
-                random_account = random.choice(accounts_obj)
-        return random_account
+        if obj.login in ACCOUNTS_LIMIT:
+            continue
+        return obj
+    return None
 
 
 def filter_answer(text: str) -> bool:
@@ -156,7 +150,7 @@ def login_to_drom(browser, random_account):
         print(f"Авторизация прошла успешно: {random_account.login} - {random_account.password}")
 
 
-def send_message_to_seller(path_to_announcement, id_user, browser, account_name) -> bool:
+def send_message_to_seller(path_to_announcement, browser, account_name):
     """ Функция для отправки сообщения по объявлению """
 
     browser.get(path_to_announcement)
@@ -200,7 +194,7 @@ def send_message_to_seller(path_to_announcement, id_user, browser, account_name)
     try:
         send_button = WebDriverWait(browser, 5).until(
             EC.presence_of_element_located((By.XPATH,
-                                            '/html/body/div[2]/div[4]/div[1]/div[1]/div[2]/div[2]/div[6]/div/button'
+                                            '/html/body/div[2]/div[4]/div[1]/div[1]/div[2]/div[2]/div[5]/div/button'
                                             ))
         )
     except Exception:
@@ -219,7 +213,7 @@ def send_message_to_seller(path_to_announcement, id_user, browser, account_name)
                 )
             except Exception:
                 print("Внимание! У данного объявления нет кнопки Отправить сообщение!")
-                return
+                raise ValueError
     send_button.click()
     template_dict = get_template(TEMPLATE_STRING)
     random_text = get_random_message(template_dict)
@@ -248,8 +242,7 @@ def send_message_to_seller(path_to_announcement, id_user, browser, account_name)
         print(f"Сообщение отправлено: {' '.join(random_text)}")
     else:
         print(f"Внимание! Превышен лимит отправленных сообщений у этого аккаунта: {account_name.login}")
-        print("Заканчиваю рассылку сообщений...")
-        return False
+        print("Переключаюсь на другой аккаунт...")
         browser.close()
 
         options = Options()
@@ -262,7 +255,12 @@ def send_message_to_seller(path_to_announcement, id_user, browser, account_name)
         options.add_argument('log-level=3')
         options.add_experimental_option('excludeSwitches', ['enable-logging'])
         options.add_argument("--disable-blink-features=AutomationControlled")
-        random_account = get_random_account()
+        ACCOUNTS_LIMIT.append(account_name.login)
+        random_account = get_account()
+        if random_account is None:
+            print("ВНИМАНИЕ! У ВСЕХ АККАУНТОВ ЗАКОНЧИЛСЯ ЛИМИТ НА СООБЩЕНИЯ!")
+            print("Останавливаю рассылку...")
+            raise IndexError
 
         try:
             proxy = random.choice([proxy.proxy for proxy in Proxy.select().where(Proxy.account == random_account)])
@@ -280,12 +278,10 @@ def send_message_to_seller(path_to_announcement, id_user, browser, account_name)
             browser.execute_script(cursor_script)
         except Exception:
             print("Не удалось ввести скрипты для обхода капчи!")
-        random_account = get_random_account(old_acc=account_name)
         print("Выбран этот аккаунт:", random_account.login)
         login_to_drom(browser, random_account)
         random_mouse_movements(browser)
-        send_message_to_seller(path_to_announcement, id_user, browser, random_account)
-    return True
+        send_message_to_seller(path_to_announcement, browser, random_account)
     # browser.close()
     # Отправка сообщения селлеру
 
@@ -316,8 +312,6 @@ def get_all_messages():
         options.add_experimental_option('useAutomationExtension', False)
         options.add_argument('log-level=3')
         options.add_experimental_option('excludeSwitches', ['enable-logging'])
-
-        result_answers = list()
         for random_account in Account.select().iterator():
             try:
                 proxy = random.choice([proxy.proxy for proxy in Proxy.select().where(Proxy.account == random_account)])
@@ -353,8 +347,8 @@ def get_all_messages():
                         announcement_name_obj = WebDriverWait(browser, 10).until(
                             EC.presence_of_element_located(
                                 (
-                                By.XPATH, f'//*[@id="inbox-static-container"]/div/div/section[2]/div/section/div/div[1]'
-                                          f'/div[2]/div[1]/header/div/h3/a'))
+                                    By.XPATH, f'//*[@id="inbox-static-container"]/div/div/section[2]/div/section/div/'
+                                              f'div[1]/div[2]/div[1]/header/div/h3/a'))
                         )
                         announcement_name = announcement_name_obj.text
                         path_to_announcement = announcement_name_obj.get_attribute('href')
@@ -365,7 +359,6 @@ def get_all_messages():
                                            f'div/div[1]/div[2]/div[1]/header/div/h2/strong/span/a'))
                         )
                         seller_login = seller_obj.text
-                        seller_path = seller_obj.get_attribute('href')
 
                         price = WebDriverWait(browser, 10).until(
                             EC.presence_of_element_located(
@@ -403,72 +396,77 @@ def get_all_messages():
                 except Exception:
                     # Значит кончились диалоги \ либо он один
                     break
+            # if not messages_list:
+            #     # Пробуем один диалог (если список сообщений пустой)
+            #     try:
+            #         elem = WebDriverWait(browser, 10).until(
+            #             EC.presence_of_element_located(
+            #                 (By.XPATH,
+            #                  '//*[@id="inbox-static-container"]/div/div/section[1]/div/div[2]/div/div[1]/div/div/div[2]/ul/li'))
+            #         )
+            #
+            #         elem.click()
+            #         announcement_name_obj = WebDriverWait(browser, 10).until(
+            #             EC.presence_of_element_located(
+            #                 (By.XPATH, f'//*[@id="inbox-static-container"]/div/div/section[2]/div/section/div/div[1]'
+            #                            f'/div[2]/div[1]/header/div/h3/a'))
+            #         )
+            #         announcement_name = announcement_name_obj.text
+            #         path_to_announcement = announcement_name_obj.get("href", None)
+            #
+            #         seller_obj = WebDriverWait(browser, 10).until(
+            #             EC.presence_of_element_located(
+            #                 (By.XPATH, f'//*[@id="inbox-static-container"]/div/div/section[2]/div/section/'
+            #                            f'div/div[1]/div[2]/div[1]/header/div/h2/strong/span/a'))
+            #         )
+            #         seller_login = seller_obj.text
+            #         seller_path = seller_obj.get("href", None)
+            #
+            #         price = WebDriverWait(browser, 10).until(
+            #             EC.presence_of_element_located(
+            #                 (By.XPATH, f'//*[@id="inbox-static-container"]/div/div/section[2]'
+            #                            f'/div/section/div/div[1]/div[2]/div[1]/header/div/h3/strong'))
+            #         ).text
+            #
+            #         messages: str = WebDriverWait(browser, 10).until(
+            #             EC.presence_of_element_located(
+            #                 (By.XPATH, f'//*[@id="inbox-static-container"]/div/div/section[2]'))
+            #         ).text
+            #         messages = messages[messages.find("р.") + 2:]
+            #         # Здесь посмотреть как извлечь из этого объекта логи
+            #         result_text = f"\nПродавец {seller_login} ответил.\n" \
+            #                       f"Ссылка до страницы продавца - {seller_path}\n" \
+            #                       f"Имя объявления: {announcement_name}\n" \
+            #                       f"Ссылка на объявление: {path_to_announcement}\n" \
+            #                       f"Цена: {price}\n" \
+            #                       f"Логи переписки:\n{messages}"
+            #         messages_list.append(result_text)
+            #
+            #     except Exception:
+            #         print("Нет полученных ответов!")
             if not messages_list:
-                # Пробуем один диалог (если список сообщений пустой)
-                try:
-                    elem = WebDriverWait(browser, 10).until(
-                        EC.presence_of_element_located(
-                            (By.XPATH,
-                             '//*[@id="inbox-static-container"]/div/div/section[1]/div/div[2]/div/div[1]/div/div/div[2]/ul/li'))
-                    )
-
-                    elem.click()
-                    announcement_name_obj = WebDriverWait(browser, 10).until(
-                        EC.presence_of_element_located(
-                            (By.XPATH, f'//*[@id="inbox-static-container"]/div/div/section[2]/div/section/div/div[1]'
-                                       f'/div[2]/div[1]/header/div/h3/a'))
-                    )
-                    announcement_name = announcement_name_obj.text
-                    path_to_announcement = announcement_name_obj.get("href", None)
-
-                    seller_obj = WebDriverWait(browser, 10).until(
-                        EC.presence_of_element_located(
-                            (By.XPATH, f'//*[@id="inbox-static-container"]/div/div/section[2]/div/section/'
-                                       f'div/div[1]/div[2]/div[1]/header/div/h2/strong/span/a'))
-                    )
-                    seller_login = seller_obj.text
-                    seller_path = seller_obj.get("href", None)
-
-                    price = WebDriverWait(browser, 10).until(
-                        EC.presence_of_element_located(
-                            (By.XPATH, f'//*[@id="inbox-static-container"]/div/div/section[2]'
-                                       f'/div/section/div/div[1]/div[2]/div[1]/header/div/h3/strong'))
-                    ).text
-
-                    messages: str = WebDriverWait(browser, 10).until(
-                        EC.presence_of_element_located(
-                            (By.XPATH, f'//*[@id="inbox-static-container"]/div/div/section[2]'))
-                    ).text
-                    messages = messages[messages.find("р.") + 2:]
-                    # Здесь посмотреть как извлечь из этого объекта логи
-                    result_text = f"\nПродавец {seller_login} ответил.\n" \
-                                  f"Ссылка до страницы продавца - {seller_path}\n" \
-                                  f"Имя объявления: {announcement_name}\n" \
-                                  f"Ссылка на объявление: {path_to_announcement}\n" \
-                                  f"Цена: {price}\n" \
-                                  f"Логи переписки:\n{messages}"
-                    messages_list.append(result_text)
-
-
-                except Exception:
-                    messages_list.append("Нет полученных ответов...")
+                print("Нет полученных ответов!")
             for message in messages_list:
                 try:
                     Answer.create(text=message)
                 except Exception:
-                    cur_answer = Answer.get(text=message)
-                    cur_answer.active = False
-                    cur_answer.save()
-            result_answers.extend([answer.text for answer in Answer.select().where(Answer.active == True)])
+                    Answer.create(text=f"{message}.")
 
             browser.close()
+
+        result_answers = list()
+        for answer in Answer.select():
+            if answer.active is True:
+                result_answers.append(answer.text)
+                answer.active = False
+                answer.save()
         return result_answers
 
     except Exception:
         return ["У вас проблемы с интернетом!"]
 
 
-def send_messages_drom(url_path, id_user):
+def send_messages_drom(url_path, user_id):
     """ Функция для работы в дром. Запускает браузер, переходит по ссылке и рассылает сообщения. """
     # Здесь парсинг ссылок на объявления
     proxy = get_proxy()
@@ -502,7 +500,6 @@ def send_messages_drom(url_path, id_user):
                                 if div_i.tag == "div":
                                     divs = [div_j for div_j in div_i if div_j.tag == "div"]
                                     if len(divs) == 2:
-                                        print("Дошел до очередной ссылки...")
                                         is_block = True
                                     break
                             break
@@ -511,6 +508,8 @@ def send_messages_drom(url_path, id_user):
     except Exception:
         print("Произошла ошибка! Не удалось получить список ссылок на объявления")
         exit()
+    else:
+        print("Парсинг через запросы завершен успешно!")
 
     options = Options()
     options.add_argument("--headless")
@@ -522,7 +521,7 @@ def send_messages_drom(url_path, id_user):
     options.add_argument('log-level=3')
     options.add_experimental_option('excludeSwitches', ['enable-logging'])
     options.add_argument("--disable-blink-features=AutomationControlled")
-    random_account = get_random_account()
+    random_account = get_account()
 
     try:
         proxy = random.choice([proxy.proxy for proxy in Proxy.select().where(Proxy.account == random_account)])
@@ -539,7 +538,7 @@ def send_messages_drom(url_path, id_user):
         browser.execute_script(cursor_script)
     except Exception:
         print("Не удалось ввести скрипты для обхода капчи!")
-    print("Повторная попытка спарсить страницу...")
+    print("Попытка парсинга через селениум...")
     browser.get(url_path)
     random_mouse_movements(browser)
     try:
@@ -551,7 +550,7 @@ def send_messages_drom(url_path, id_user):
                 paths.append(path_to)
 
     except Exception:
-        print("Не удалось спарсить страницу!")
+        print("Не удалось спарсить страницу через селениум!")
 
     browser.close()
     if len(paths) == 0:
@@ -581,7 +580,7 @@ def send_messages_drom(url_path, id_user):
                 sleep(60 * 60)
                 continue
 
-        random_account = get_random_account()
+        random_account = get_account()
         try:
             proxy = random.choice([proxy.proxy for proxy in Proxy.select().where(Proxy.account == random_account)])
         except Exception:
@@ -598,26 +597,34 @@ def send_messages_drom(url_path, id_user):
         random_mouse_movements(browser)
 
         for path in paths:
-            # subprocess.Popen(f"{PATH_TO_PYTHON} handlers/custom_heandlers/work/send_message.py {path} {id_user}",
-            #                  close_fds=True)
             try:
-                result = send_message_to_seller(path, id_user, browser, random_account)
-                if not result:
-                    exit()
+                send_message_to_seller(path, browser, random_account)
+            except ValueError:
+                print("Скорее всего, нет кнопки отправить сообщение!")
+            except IndexError:
+                print("Закончился лимит сообщений на всех аккаунтах!")
+                bot.send_message(user_id, f"Рассылка сообщений по ссылке {url_path} прекращена!\n"
+                                          f"Кончились лимиты сообщений на всех аккаунтах")
+                ACCOUNTS_LIMIT.clear()
+                exit()
             except Exception:
                 print(f"Произошла какая-то ошибка, возможно связана с капчой")
             random_interval = random.choice(minutes)
             print(f"Засыпаю на {random_interval} минут")
             sleep(random_interval * 60)
+        bot.send_message(user_id, f"Рассылка сообщений по ссылке {url_path} закончена!")
+        ACCOUNTS_LIMIT.clear()
         break
 
 
 if __name__ == '__main__':
-    path, id_user = sys.argv[1], sys.argv[2]
-    print("Запущен асинхронный процесс! Переданы следующие параметры:\n"
-          f"Path: {path}\n"
-          f"ID_USER: {id_user}\n")
-    try:
-        send_messages_drom(path, id_user)
-    except Exception:
-        print("Произошла какая-то ошибка с процессом! Возможно связана с капчой...")
+    id_user = sys.argv[1]
+    for obj in Queue.select().order_by(Queue.created.desc()):
+        url = obj.url
+        print(f"Взял в обработку следующую ссылку: {url}")
+        try:
+            send_messages_drom(url, id_user)
+        except Exception:
+            print(f"Произошла какая-то ошибка при обработки {url}! Возможно связана с капчой...")
+    Queue.delete().execute()
+    bot.send_message(id_user, "Закончил обработку всех ссылок!")

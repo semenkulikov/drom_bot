@@ -1,4 +1,5 @@
 import os
+
 from dotenv import load_dotenv, find_dotenv
 
 if not find_dotenv():
@@ -15,7 +16,10 @@ DEFAULT_COMMANDS = (
     ('accounts', "Добавить аккаунт"),
     ('info', "Информация о настройках"),
     ('get', "Получить ответы продавцов"),
+    ("get_stop", "Остановить парсинг ответов"),
+    ("get_settings", "Настройка get"),
     ("update", "Редактирование аккаунтов"),
+    ("start_spam", "Запустить рассылку сообщений"),
     ("stop_spam", "Остановить рассылку сообщений"),
     ("stop", "Выход из всех состояний бота")
 )
@@ -35,7 +39,6 @@ USERS_SPAM = [
 ]
 
 PATH_TO_PYTHON = os.path.normpath(os.path.join(BASE_DIR, "venv/Scripts/python.exe"))
-
 
 DENIAL_WORDS = [
                 # Здесь слова, которые не должны встречаться в ответах продавцов.

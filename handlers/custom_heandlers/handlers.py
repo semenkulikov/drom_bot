@@ -3,12 +3,11 @@ import random
 import subprocess
 from time import sleep
 from urllib.parse import urlparse
-
 import psutil
 from telebot.types import Message
 
 from config_data.config import TEMPLATE_STRING, PATH_TO_PYTHON, BASE_DIR, ALLOWED_USERS, USERS_SPAM
-from database.models import Interval, MailingTime, Account, Proxy
+from database.models import Interval, MailingTime, Account, Proxy, IntervalGetModel, Queue
 from handlers.custom_heandlers.work.get_template import get_template, get_random_message
 from keyboards.inline.accounts import account_markup, get_actions_acc, get_proxy_markup
 from keyboards.inline.settings import settings_inline
@@ -16,6 +15,7 @@ from loader import bot
 from states.states import UrlState, GetSettingsState, AccountState, UpdateAccount
 
 PIDS_PROCESS = list()
+PIDS_PROCESS_GET = list()
 
 
 @bot.message_handler(commands=["stop"])
@@ -46,11 +46,29 @@ def get_url(message: Message) -> None:
         if not urlparse(url).scheme:
             bot.send_message(message.from_user.id, "Необходимо ввести корректную ссылку.")
             return
-        # Здесь сохранение ссылки в бд и рассылка сообщений. Вызывается функция для запросов к апи.
-        bot.send_message(message.from_user.id, "Ссылка сохранена успешно. Началась рассылка сообщений...")
+        Queue.create(url=url)
+        # Здесь сохранение ссылки в очередь
+        bot.send_message(message.from_user.id, "Ссылка успешно добавлена в очередь.")
+        result_queue = ""
+        for index, obj in enumerate(Queue.select()):
+            result_queue += f"\n{index + 1} - {obj.url}"
+        bot.send_message(message.from_user.id, f"Текущая очередь: {result_queue}")
         bot.set_state(message.from_user.id, None)
+
+        # process = subprocess.Popen(f"{PATH_TO_PYTHON} "
+        #                  f"{BASE_DIR}/handlers/custom_heandlers/work/parser.py {url} {message.from_user.id}",
+        #                  close_fds=True)
+        # PIDS_PROCESS.append(process.pid)
+
+
+@bot.message_handler(commands=["start_spam"])
+def start_spam(message: Message) -> None:
+    """ Хендлер для рассылки сообщений """
+    if message.from_user.id in ALLOWED_USERS:
+        bot.send_message(message.from_user.id,
+                         "Начинаю рассылку сообщений...")
         process = subprocess.Popen(f"{PATH_TO_PYTHON} "
-                         f"{BASE_DIR}/handlers/custom_heandlers/work/parser.py {url} {message.from_user.id}",
+                         f"{BASE_DIR}/handlers/custom_heandlers/work/parser.py {message.from_user.id}",
                          close_fds=True)
         PIDS_PROCESS.append(process.pid)
 
@@ -232,7 +250,8 @@ def get_acc(call) -> None:
         proxies = ", ".join([proxy.proxy for proxy in Proxy.select().where(Proxy.account == cur_account)])
         if proxies == "":
             proxies = "нет прокси"
-        bot.send_message(call.message.chat.id, f"Текущий аккаунт: {cur_account.login} - {cur_account.password} - {proxies}")
+        bot.send_message(call.message.chat.id,
+                         f"Текущий аккаунт: {cur_account.login} - {cur_account.password} - {proxies}")
         bot.send_message(call.message.chat.id, "Выберите, что редактировать", reply_markup=get_actions_acc())
         bot.set_state(call.message.chat.id, UpdateAccount.get_info)
 
@@ -370,11 +389,21 @@ def get_info(message: Message) -> None:
         except (KeyError, TypeError):
             template_text = "Что-то не так в шаблоне сообщения. Посмотрите и исправьте)"
             print("Внимание! Ошибка в шаблоне сообщения.")
+        try:
+            interval_get_text = IntervalGetModel.get_by_id(1).interval_get
+        except Exception:
+            interval_get_text = "Нет интервала парсинга ответов в базе данных"
         random_text = get_random_message(template_dict)
+
+        result_queue = ""
+        for index, obj in enumerate(Queue.select()):
+            result_queue += f"\n{index + 1} - {obj.url}"
         result_text = f"Основная информация по боту:\n    Текущий интервал между рассылкой: {interval}\n    " \
                       f"Рандомный интервал: {random_interval}\n    " \
                       f"Время начала рассылки: {start_time}\n    " \
                       f"Время окончания: {end_time}\n    " \
+                      f"Текущий интервал парсинга ответов: {interval_get_text} минут\n    " \
+                      f"Текущая очередь ссылок для рассылки: {result_queue}\n    " \
                       f"Ваши текущие аккаунты: {accounts_text}\n    " \
                       f"Шаблон сообщения: {template_text}\n    " \
                       f"Процент понижения цены: {template_dict.get('percent')}\n    " \
@@ -387,11 +416,63 @@ def get_answer(message: Message) -> None:
     """ Обработчик команды для выдачи ответов продавцов """
     if message.from_user.id in ALLOWED_USERS:
         bot.send_message(message.from_user.id, "Подождите, начался парсинг ответов...")
-        bot.send_message(message.from_user.id, "Буду присылать ответы в группу раз в 10 минут")
+        try:
+            time_sleep = IntervalGetModel.get_by_id(1).interval_get
+        except Exception:
+            time_sleep = 10
+        bot.send_message(message.from_user.id, f"Буду присылать ответы в группу раз в {time_sleep} минут")
         group_id = -4029295870
+        try:
+            time_sleep = IntervalGetModel.get_by_id(1).interval_get
+        except Exception:
+            time_sleep = 10
         process = subprocess.Popen(f"{PATH_TO_PYTHON} "
-                         f"{BASE_DIR}/handlers/custom_heandlers/get_answers.py {group_id}",
-                         close_fds=True)
+                                   f"{BASE_DIR}/handlers/custom_heandlers/get_answers.py {group_id} {time_sleep}",
+                                   close_fds=True)
+        global PIDS_PROCESS_GET
+        PIDS_PROCESS_GET.append(process.pid)
+
+
+@bot.message_handler(commands=["get_stop"])
+def get_stopping(message: Message) -> None:
+    """ Обработчик команды для остановки парсинга ответов """
+    if message.from_user.id in ALLOWED_USERS:
+        bot.send_message(message.from_user.id, "Подождите, останавливаю парсинг ответов...")
+        global PIDS_PROCESS_GET
+        for proc in psutil.process_iter():
+            # check whether the process name matches
+            if proc.pid in PIDS_PROCESS_GET:
+                print("Process {} (PID: {}) is stopped.".format(proc.name(), proc.pid))
+                proc.kill()
+                PIDS_PROCESS_GET.remove(proc.pid)
+        bot.send_message(message.from_user.id, "Операция выполнена успешно.")
+
+
+@bot.message_handler(commands=["get_settings"])
+def get_answer_settings(message: Message) -> None:
+    """ Обработчик для настройки парсинга ответов продавцов """
+    try:
+        interval_get_text = IntervalGetModel.get(id=1).interval_get
+    except Exception:
+        interval_get_text = "Нет интервала в базе данных"
+    bot.send_message(message.from_user.id, "Введите частоту запуска парсинга ответов.\n"
+                                           f"Текущий интервал парсинга ответов: {interval_get_text} минут")
+    bot.set_state(message.from_user.id, GetSettingsState.interval_get)
+
+
+@bot.message_handler(state=GetSettingsState.interval_get)
+def interval_get(message: Message):
+    """ Обработчик для настройки интервала парсинга ответов продавцов """
+    if message.from_user.id in ALLOWED_USERS:
+        try:
+            interval_obj = IntervalGetModel.get(id=1)
+            interval_obj.interval_get = message.text
+            interval_obj.save()
+            bot.send_message(message.from_user.id, f"Интервал {message.text} успешно сохранен.")
+        except Exception:
+            IntervalGetModel.create(interval_get=message.text)
+            bot.send_message(message.from_user.id, f"Интервал {message.text} успешно создан.")
+        bot.set_state(message.from_user.id, None)
 
 
 @bot.message_handler(commands=["stop_spam"])

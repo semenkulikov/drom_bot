@@ -1,3 +1,5 @@
+import datetime
+
 import peewee
 
 db = peewee.SqliteDatabase("database/database.db")
@@ -35,6 +37,15 @@ class Answer(BaseModel):
     """ Класс-модель для объявления """
     text = peewee.CharField(unique=True)
     active = peewee.BooleanField(default=True)
+
+
+class IntervalGetModel(BaseModel):
+    interval_get = peewee.IntegerField()
+
+
+class Queue(BaseModel):
+    url = peewee.CharField()
+    created = peewee.DateTimeField(default=datetime.datetime.now())
 
 
 def create_models():

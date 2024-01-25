@@ -9,6 +9,7 @@ class GetSettingsState(StatesGroup):
     get_settings = State()
     time = State()
     interval = State()
+    interval_get = State()
 
 
 class AccountState(StatesGroup):
