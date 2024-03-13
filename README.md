@@ -1,16 +1,18 @@
 # **Drom bot**
 
 
-Данный бот умеет делать рассылку сообщений в Дром.
+Данный бот умеет делать рассылку сообщений в Дром по заданной пользователем ссылке, фильтровать ответы продавцов, 
 
 ## Used technology
 
-* Python (3.10)
+* Python (3.12)
 * PyTelegramBotApi (Telegram Bot framework)
 * SQLite3 (database)
 * requests (2.28.1)
 * telebot-calendar (1.2)
 * Peewee (3.16.2)
+* Selenium (4.12.0)
+* BeautifulSoup (4.12.2)
 
 
 ## Installation
