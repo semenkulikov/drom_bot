@@ -4,7 +4,7 @@ import random
 import re
 import sys
 from time import sleep
-
+from fake_useragent import UserAgent
 import requests
 from lxml import etree
 from selenium import webdriver
@@ -24,15 +24,21 @@ from database.models import Account, Proxy, Answer, Queue
 from database.models import Interval, MailingTime
 from handlers.custom_heandlers.work.get_template import price_rounding, get_template, get_random_message
 
-options = Options()
-# options.add_argument("--headless")
-# options.add_argument("--incognito")
+# options = Options()
 options = webdriver.ChromeOptions()
+options.add_argument("--headless")
+# options.add_argument("--incognito")
+
+ua = UserAgent()
+user_agent = ua.random
+options.add_argument('--ignore-certificate-errors')
+options.add_argument('--ignore-ssl-errors')
+options.add_argument(f'--user-agent={user_agent}')
 options.add_argument("start-maximized")
 options.add_experimental_option("excludeSwitches", ["enable-automation"])
 options.add_experimental_option('useAutomationExtension', False)
-options.add_argument('log-level=3')
 options.add_experimental_option('excludeSwitches', ['enable-logging'])
+options.add_argument('log-level=3')
 cursor_script = '''
 var cursor = document.createElement('div');
 cursor.style.position = 'absolute';
@@ -50,6 +56,14 @@ document.addEventListener('mousemove', function(e) {
 });
 '''
 ACCOUNTS_LIMIT = list()
+
+
+def set_viewport_size(driver, width, height):
+    window_size = driver.execute_script("""
+        return [window.outerWidth - window.innerWidth + arguments[0],
+          window.outerHeight - window.innerHeight + arguments[1]];
+        """, width, height)
+    driver.set_window_size(*window_size)
 
 
 def random_mouse_movements(driver):
@@ -178,7 +192,7 @@ def send_message_to_seller(path_to_announcement, browser, account_name):
             sleep(random.choice([0.3, 0.5, 1, 2, 1.5]))
 
     except Exception:
-        print("Что-то пошло не так с фотками!")
+        print("У данного объявления фоток не обнаружено!")
     else:
         print("Фотки успешно просмотрены")
     browser.get(path_to_announcement)
@@ -208,7 +222,8 @@ def send_message_to_seller(path_to_announcement, browser, account_name):
             try:
                 send_button = WebDriverWait(browser, 10).until(
                     EC.presence_of_element_located((By.XPATH,
-                                                    "/html/body/div[2]/div[4]/div[1]/div[1]/div[2]/div[2]/div[5]/div/button"
+                                                    "/html/body/div[2]/div[4]/div[1]/div[1]/"
+                                                    "div[2]/div[2]/div[6]/div/button"
                                                     ))
                 )
             except Exception:
@@ -245,15 +260,18 @@ def send_message_to_seller(path_to_announcement, browser, account_name):
         print("Переключаюсь на другой аккаунт...")
         browser.close()
 
-        options = Options()
+        # options = Options()
+        options = webdriver.ChromeOptions()
         options.add_argument("--headless")
         options.add_argument("--incognito")
-        options = webdriver.ChromeOptions()
+        options.add_argument('--ignore-certificate-errors')
+        options.add_argument('--ignore-ssl-errors')
         options.add_argument("start-maximized")
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_experimental_option('useAutomationExtension', False)
-        options.add_argument('log-level=3')
+
         options.add_experimental_option('excludeSwitches', ['enable-logging'])
+        options.add_argument('log-level=3')
         options.add_argument("--disable-blink-features=AutomationControlled")
         ACCOUNTS_LIMIT.append(account_name.login)
         random_account = get_account()
@@ -269,12 +287,12 @@ def send_message_to_seller(path_to_announcement, browser, account_name):
         if proxy:
             options.add_argument(f'--proxy-server={proxy}')
         browser = webdriver.Chrome(service=ChromeService(executable_path=DRIVER_PATH), options=options)
+        set_viewport_size(browser, 1400, 800)
         try:
             browser.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             browser.execute_cdp_cmd('Network.setUserAgentOverride',
                                     {
-                                        "userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, '
-                                                     'like Gecko) Chrome/83.0.4103.53 Safari/537.36'})
+                                        "userAgent": UserAgent().chrome})
             browser.execute_script(cursor_script)
         except Exception:
             print("Не удалось ввести скрипты для обхода капчи!")
@@ -303,15 +321,22 @@ def get_session(proxy: None):
 def get_all_messages():
     try:
         """ Здесь будет парсинг последних сообщений продавцов. """
-        options = Options()
+        # options = Options()
+        options = webdriver.ChromeOptions()
+        ua = UserAgent()
+        user_agent = ua.random
+
+        options.add_argument(f'--user-agent={user_agent}')
         options.add_argument("--headless")
         options.add_argument("--incognito")
-        options = webdriver.ChromeOptions()
+        options.add_argument('--ignore-certificate-errors')
+        options.add_argument('--ignore-ssl-errors')
         options.add_argument("start-maximized")
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_experimental_option('useAutomationExtension', False)
-        options.add_argument('log-level=3')
+
         options.add_experimental_option('excludeSwitches', ['enable-logging'])
+        options.add_argument('log-level=3')
         for random_account in Account.select().iterator():
             try:
                 proxy = random.choice([proxy.proxy for proxy in Proxy.select().where(Proxy.account == random_account)])
@@ -320,12 +345,12 @@ def get_all_messages():
             if proxy:
                 options.add_argument(f'--proxy-server={proxy}')
             browser = webdriver.Chrome(service=ChromeService(executable_path=DRIVER_PATH), options=options)
+            set_viewport_size(browser, 1400, 800)
             try:
                 browser.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
                 browser.execute_cdp_cmd('Network.setUserAgentOverride',
                                         {
-                                            "userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, '
-                                                         'like Gecko) Chrome/83.0.4103.53 Safari/537.36'})
+                                            "userAgent": UserAgent().chrome})
                 browser.execute_script(cursor_script)
             except Exception:
                 print("Не удалось ввести скрипты для обхода капчи!")
@@ -463,7 +488,7 @@ def get_all_messages():
         return result_answers
 
     except Exception:
-        return ["У вас проблемы с интернетом!"]
+        return ["Возможно, у вас проблемы с интернетом!"]
 
 
 def send_messages_drom(url_path, user_id):
@@ -511,15 +536,22 @@ def send_messages_drom(url_path, user_id):
     else:
         print("Парсинг через запросы завершен успешно!")
 
-    options = Options()
+    # options = Options()
+    options = webdriver.ChromeOptions()
     options.add_argument("--headless")
     options.add_argument("--incognito")
-    options = webdriver.ChromeOptions()
+
+    ua = UserAgent()
+    user_agent = ua.random
+
+    options.add_argument(f'--user-agent={user_agent}')
+    options.add_argument('--ignore-certificate-errors')
+    options.add_argument('--ignore-ssl-errors')
     options.add_argument("start-maximized")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
-    options.add_argument('log-level=3')
     options.add_experimental_option('excludeSwitches', ['enable-logging'])
+    options.add_argument('log-level=3')
     options.add_argument("--disable-blink-features=AutomationControlled")
     random_account = get_account()
 
@@ -530,11 +562,11 @@ def send_messages_drom(url_path, user_id):
     if proxy:
         options.add_argument(f'--proxy-server={proxy}')
     browser = webdriver.Chrome(service=ChromeService(executable_path=DRIVER_PATH), options=options)
+    set_viewport_size(browser, 1400, 800)
     try:
         browser.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         browser.execute_cdp_cmd('Network.setUserAgentOverride',
-                                {"userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, '
-                                              'like Gecko) Chrome/83.0.4103.53 Safari/537.36'})
+                                {"userAgent": UserAgent().chrome})
         browser.execute_script(cursor_script)
     except Exception:
         print("Не удалось ввести скрипты для обхода капчи!")
@@ -588,10 +620,10 @@ def send_messages_drom(url_path, user_id):
         if proxy:
             options.add_argument(f'--proxy-server={proxy}')
         browser = webdriver.Chrome(service=ChromeService(executable_path=DRIVER_PATH), options=options)
+        set_viewport_size(browser, 1400, 800)
         browser.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         browser.execute_cdp_cmd('Network.setUserAgentOverride',
-                                {"userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                                              '(KHTML, like Gecko) Chrome/83.0.4103.53 Safari/537.36'})
+                                {"userAgent": UserAgent().chrome})
         browser.execute_script(cursor_script)
         login_to_drom(browser, random_account)
         random_mouse_movements(browser)
@@ -608,7 +640,7 @@ def send_messages_drom(url_path, user_id):
                 ACCOUNTS_LIMIT.clear()
                 exit()
             except Exception:
-                print(f"Произошла какая-то ошибка, возможно связана с капчой")
+                print(f"Произошла какая-то ошибка!")
             random_interval = random.choice(minutes)
             print(f"Засыпаю на {random_interval} минут")
             sleep(random_interval * 60)
@@ -625,6 +657,9 @@ if __name__ == '__main__':
         try:
             send_messages_drom(url, id_user)
         except Exception:
-            print(f"Произошла какая-то ошибка при обработки {url}! Возможно связана с капчой...")
+            print(f"Произошла какая-то ошибка при обработки {url}!")
     Queue.delete().execute()
     bot.send_message(id_user, "Закончил обработку всех ссылок!")
+
+
+# https://github.com/xHossein/PyPasser
